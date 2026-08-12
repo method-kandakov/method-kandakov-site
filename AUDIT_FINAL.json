@@ -1,0 +1,15 @@
+{
+  "product_editorial": {
+    "PRIVATE_role_word_occurrences": 0,
+    "ALL_SITE_role_word_occurrences": 0,
+    "PKCH_SPKCH_exact_long_paragraph_duplicates": 0
+  },
+  "legal_public_presentation": {
+    "self_employed_or_NPD_public_wording_occurrences": 0,
+    "visible_11_August_2026_occurrences": 0
+  },
+  "technical": {
+    "html_files_checked": 13,
+    "broken_local_links": []
+  }
+}
