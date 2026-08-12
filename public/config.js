@@ -1,38 +1,42 @@
-// KANDAKOV — ЕДИНАЯ ТОЧКА БЫСТРЫХ ИЗМЕНЕНИЙ
-// Меняйте здесь контакты, цены и ссылки оплаты.
-// После каждого сохранения в GitHub Cloudflare автоматически опубликует новую версию.
+/*
+METHOD KANDAKOV — EDITABLE CONFIGURATION
+Only this file needs changing when payment/contact infrastructure is finalized.
 
-window.KANDAKOV = {
-  brand: {
-    name: "Метод Кандакова",
-    site: "methodkandakov.com",
-    email: "info@methodkandakov.com",
-    telegramUser: "@alexandr_kandakov",
-    telegramUrl: "https://t.me/alexandr_kandakov",
-    inn: "352605286197",
-    executor: "Кандаков Александр Александрович"
+IMPORTANT:
+- Do NOT put Prodamus secret keys in a public website.
+- Put only public payment/subscription links here.
+- PRIVATE intentionally has no public payment link.
+*/
+window.KANDAKOV_CONFIG = {
+  contacts: {
+    telegram: "https://t.me/alexandr_kandakov",
+    email: "mailto:info@methodkandakov.com"
   },
 
-  // Цена ПКЧ здесь намеренно не зафиксирована:
-  // в утвержденных данных текущей рабочей точки её окончательное значение не указано.
-  products: {
-    pkch: {
-      price: "",
-      paymentUrl: ""       // вставить ссылку Prodamus после подключения
-    },
-    spkch: {
-      price: "49 900 ₽",
-      paymentUrl: ""       // вставить ссылку Prodamus
-    },
-    private: {
-      price: "490 000 ₽"
-      // публичной кнопки оплаты НЕТ — только обращение и предварительный анализ задачи
-    },
-    club: {
-      monthPrice: "9 900 ₽/мес",
-      yearPrice: "99 000 ₽/12 мес",
-      monthPaymentUrl: "", // вставить рекуррентную ссылку Prodamus
-      yearPaymentUrl: ""   // вставить годовую ссылку Prodamus
-    }
-  }
+  // Public Prodamus payment links.
+  // Leave "" until the real links are created in the Prodamus account.
+  prodamus: {
+    pkch: "",
+    spkch: "",
+    clubMonthly: "",
+    clubAnnual: ""
+  },
+
+  // Optional Prodamus widget domain, for example:
+  // "https://yourname.payform.ru"
+  // The site works without the widget and can use direct payment links above.
+  prodamusWidgetBaseUrl: ""
 };
+
+
+/*
+FINAL COMMERCIAL CONNECTION NOTE
+The public site is ready before Prodamus is connected.
+When Prodamus issues the public payment links, fill ONLY:
+  prodamus.pkch
+  prodamus.spkch
+  prodamus.clubMonthly
+  prodamus.clubAnnual
+PRIVATE intentionally stays without a public checkout.
+Never place Prodamus secret keys in this public file.
+*/
