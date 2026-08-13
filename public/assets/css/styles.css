@@ -509,4 +509,52 @@ body.legal main .notice{border-left:2px solid var(--gold-mid);border-top:0;backg
 @media(max-width:390px){
   .hero-final h1{font-size:54px}
   .hero-logo-final{width:min(285px,76vw)}
+}/* MOBILE HEADER FIX — legal/product pages */
+@media (max-width: 980px){
+  .site-header .desktop-nav,
+  .site-header nav:not(.mobile-drawer nav){
+    display:none !important;
+  }
+
+  .site-header .header-inner{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:space-between !important;
+    gap:14px !important;
+  }
+
+  .site-header .brand{
+    min-width:0 !important;
+    flex:1 1 auto !important;
+  }
+
+  .site-header .brand-copy{
+    min-width:0 !important;
+  }
+
+  .site-header .brand-copy strong{
+    display:block !important;
+    white-space:nowrap !important;
+  }
+
+  .site-header .brand-copy small{
+    display:block !important;
+    white-space:nowrap !important;
+  }
+
+  .site-header .menu-btn{
+    display:flex !important;
+    flex:0 0 auto !important;
+  }
+
+  body{
+    overflow-x:hidden !important;
+  }
+
+  main,
+  .product-hero,
+  .legal-page,
+  .legal-hero{
+    scroll-margin-top:120px;
+  }
 }
