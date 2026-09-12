@@ -73,6 +73,7 @@ if (mode === 'setup') {
   const sent = await telegram('sendMessage', {
     chat_id: chatId,
     text: payload.message,
+    parse_mode: 'HTML',
     disable_web_page_preview: false,
   });
   console.log(`Telegram accepted the publication (message ${sent.message_id}).`);
