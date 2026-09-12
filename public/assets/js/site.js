@@ -6,6 +6,41 @@
 
   qsa("[data-year]").forEach(el => el.textContent = new Date().getFullYear());
 
+  // Keep the cookie policy reachable from every page that uses the shared footer.
+  qsa(".footer-links").forEach(links => {
+    if (!qs('a[href="cookies.html"]', links)) {
+      const clubTerms = qs('a[href="club-terms.html"]', links);
+      const cookieLink = document.createElement("a");
+      cookieLink.href = "cookies.html";
+      cookieLink.textContent = "Политика использования cookie";
+      links.insertBefore(cookieLink, clubTerms || null);
+    }
+  });
+
+  // The current site stores only the acknowledgement below in localStorage.
+  // Analytics and advertising tools must not be loaded unless a separate
+  // opt-in choice is implemented.
+  const cookieChoiceKey = "mk_cookie_notice_v1";
+  if (!localStorage.getItem(cookieChoiceKey)) {
+    const notice = document.createElement("section");
+    notice.className = "cookie-notice";
+    notice.setAttribute("aria-label", "Уведомление об использовании cookie");
+    notice.innerHTML = `
+      <div>
+        <strong>Технические данные</strong>
+        <p>Сайт сохраняет на устройстве только отметку о закрытии этого уведомления. Рекламная и аналитическая слежка не используется.</p>
+      </div>
+      <div class="cookie-actions">
+        <a href="cookies.html">Подробнее</a>
+        <button type="button" class="btn btn-gold" data-cookie-accept>Понятно</button>
+      </div>`;
+    document.body.appendChild(notice);
+    qs("[data-cookie-accept]", notice).addEventListener("click", () => {
+      localStorage.setItem(cookieChoiceKey, "acknowledged");
+      notice.remove();
+    });
+  }
+
   // Mobile menu
   const menuBtn = qs(".menu-btn");
   const desktopNav = qs(".desktop-nav");
@@ -30,14 +65,15 @@
     document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
   }
 
-  // Checkout modal for PKCH / SPKCH / CLUB.
+  // Checkout shell. Until online payment is connected, it routes the user to
+  // direct contact without collecting personal data on this site.
   const layer = document.createElement("div");
   layer.className = "checkout-layer";
   layer.innerHTML = `
     <div class="checkout-backdrop" data-checkout-close></div>
     <div class="checkout-card" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
       <button class="checkout-close" data-checkout-close type="button" aria-label="Закрыть">×</button>
-      <div class="eyebrow">Оформление</div>
+      <div class="eyebrow">Оформление запроса</div>
       <h3 id="checkout-title">Заказ</h3>
       <div class="checkout-price" id="checkout-price"></div>
       <label class="checkline">
@@ -46,10 +82,10 @@
       </label>
       <label class="checkline">
         <input type="checkbox" id="accept-pd">
-        <span>Я даю <a href="consent.html" target="_blank" rel="noopener">согласие на обработку персональных данных</a> и ознакомлен(а) с <a href="privacy.html" target="_blank" rel="noopener">Политикой ПД</a>.</span>
+        <span>Я ознакомлен(а) с <a href="privacy.html" target="_blank" rel="noopener">Политикой обработки персональных данных</a>. Отдельное согласие будет зафиксировано при заполнении анкеты.</span>
       </label>
       <div class="checkout-note" id="recurring-note"></div>
-      <button class="btn btn-gold" id="checkout-go" type="button" aria-disabled="true">Перейти к оплате</button>
+      <button class="btn btn-gold" id="checkout-go" type="button" aria-disabled="true">Перейти к оформлению</button>
       <div class="checkout-message" id="checkout-message"></div>
     </div>`;
   document.body.appendChild(layer);
@@ -61,7 +97,6 @@
   const recurring = qs("#recurring-note", layer);
   const go = qs("#checkout-go", layer);
   const msg = qs("#checkout-message", layer);
-  let current = null;
 
   const paymentMap = () => ({
     pkch: CFG.prodamus?.pkch || "",
@@ -77,6 +112,7 @@
   offer.addEventListener("change", updateGo);
   pd.addEventListener("change", updateGo);
 
+  let current = null;
   function closeCheckout(){
     layer.classList.remove("open");
     document.body.classList.remove("modal-open");
@@ -90,11 +126,14 @@
       current = btn.dataset.checkout;
       title.textContent = btn.dataset.title || "Оформление";
       price.textContent = btn.dataset.price || "";
-      offer.checked = false; pd.checked = false; updateGo();
-      msg.classList.remove("show"); msg.textContent = "";
+      offer.checked = false;
+      pd.checked = false;
+      updateGo();
+      msg.classList.remove("show");
+      msg.textContent = "";
       recurring.textContent = btn.dataset.recurring === "true"
-        ? "Нажимая «Перейти к оплате», вы переходите в платёжную форму. Для ежемесячного CLUB условия автосписания, периодичность и возможность отключения будущих списаний должны быть явно указаны в подключённой подписке Prodamus."
-        : "После подтверждения оплаты следующий шаг предоставляется в соответствии с условиями выбранного продукта.";
+        ? "Ежемесячное участие оформляется только после отдельного явного согласия с суммой, периодичностью и условиями автопродления."
+        : "После оформления Александр Кандаков свяжется с вами для подтверждения запроса и получения необходимых данных.";
       layer.classList.add("open");
       document.body.classList.add("modal-open");
     });
@@ -107,7 +146,9 @@
       window.location.href = link;
       return;
     }
-    msg.innerHTML = `Онлайн-оформление этого продукта сейчас завершается. Для оформления можно написать в <a href="${CFG.contacts?.telegram || "https://t.me/alexandr_kandakov"}" style="color:#f0d078;text-decoration:underline">Telegram</a> или на <a href="${CFG.contacts?.email || "mailto:info@methodkandakov.com"}" style="color:#f0d078;text-decoration:underline">email</a>.`;
+    const telegram = CFG.contacts?.telegram || "https://t.me/alexandr_kandakov";
+    const email = CFG.contacts?.email || "mailto:info@methodkandakov.com";
+    msg.innerHTML = `Для оформления напишите Александру Кандакову через <a href="${telegram}" style="color:#f0d078;text-decoration:underline">Telegram</a> или <a href="${email}" style="color:#f0d078;text-decoration:underline">email</a>.`;
     msg.classList.add("show");
   });
 

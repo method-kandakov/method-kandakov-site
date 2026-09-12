@@ -481,9 +481,9 @@ body.legal main .notice{border-left:2px solid var(--gold-mid);border-top:0;backg
 /* Mobile: premium and stable, no horizontal drift */
 @media(max-width:700px){
   .hero-final{min-height:auto}
-  .hero-final .hero-inner{padding:42px 0 62px}
-  .hero-logo-final{width:min(315px,74vw);margin-bottom:18px}
-  .hero-final h1{font-size:60px}
+  .hero-final .hero-inner{padding:36px 0 52px}
+  .hero-logo-final{width:min(245px,62vw);margin-bottom:14px}
+  .hero-final h1{font-size:54px;margin:22px 0 24px}
   .hero-final .lead{font-size:19px}
   .hero-final .hero-copy{font-size:16px;line-height:1.72}
   .hero-origin{font-size:17px}
@@ -507,6 +507,43 @@ body.legal main .notice{border-left:2px solid var(--gold-mid);border-top:0;backg
   }
 }
 @media(max-width:390px){
-  .hero-final h1{font-size:54px}
-  .hero-logo-final{width:min(285px,76vw)}
+  .hero-final h1{font-size:50px}
+  .hero-logo-final{width:min(225px,60vw)}
+}
+
+.method-scope .scope-boundary{
+  max-width:900px;
+  margin:28px auto 0;
+  padding:20px 24px;
+  border-left:2px solid var(--gold);
+  color:#b8afa3;
+  background:rgba(255,255,255,.025);
+  line-height:1.65;
+}
+.method-scope .scope-boundary strong{color:#e9ca7a;font-weight:500}
+.cookie-notice{
+  position:fixed;
+  z-index:1000;
+  right:24px;
+  bottom:24px;
+  width:min(560px,calc(100% - 48px));
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+  padding:20px 22px;
+  border:1px solid rgba(213,170,85,.48);
+  border-radius:18px;
+  background:rgba(5,5,4,.97);
+  box-shadow:0 18px 70px rgba(0,0,0,.48);
+  color:#eee6dc;
+}
+.cookie-notice strong{color:#e8c269;letter-spacing:.04em}
+.cookie-notice p{margin:5px 0 0;color:#b7ada1;font-size:14px;line-height:1.5}
+.cookie-actions{display:flex;align-items:center;gap:14px;white-space:nowrap}
+.cookie-actions a{color:#d9b45e;text-decoration:underline;text-underline-offset:3px;font-size:14px}
+.cookie-actions .btn{min-width:112px;padding:12px 18px}
+@media(max-width:700px){
+  .cookie-notice{right:14px;bottom:14px;width:calc(100% - 28px);align-items:flex-start;flex-direction:column;gap:16px}
+  .cookie-actions{width:100%;justify-content:space-between}
 }
