@@ -1,0 +1,46 @@
+name: Telegram Publisher
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Action
+        required: true
+        type: choice
+        options:
+          - setup
+          - publish
+      payload:
+        description: Encrypted publication payload
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect CLUB securely
+        if: inputs.mode == 'setup'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_DECRYPT_KEY: ${{ secrets.TELEGRAM_DECRYPT_KEY }}
+        run: |
+          node telegram/publisher.mjs setup
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add telegram/club-chat.enc
+          git diff --cached --quiet || git commit -m "Connect Telegram CLUB channel"
+          git push
+
+      - name: Publish encrypted message
+        if: inputs.mode == 'publish'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_DECRYPT_KEY: ${{ secrets.TELEGRAM_DECRYPT_KEY }}
+          TELEGRAM_PAYLOAD: ${{ inputs.payload }}
+        run: node telegram/publisher.mjs publish
