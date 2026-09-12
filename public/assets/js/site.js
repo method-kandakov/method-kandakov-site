@@ -28,7 +28,7 @@
     notice.innerHTML = `
       <div>
         <strong>Технические данные</strong>
-        <p>Сайт сохраняет на устройстве только отметку о закрытии этого уведомления. Рекламная и аналитическая слежка не используется.</p>
+        <p>Сайт сохраняет на устройстве только отметку о закрытии этого уведомления. Рекламные и аналитические инструменты не используются.</p>
       </div>
       <div class="cookie-actions">
         <a href="cookies.html">Подробнее</a>
@@ -73,7 +73,7 @@
     <div class="checkout-backdrop" data-checkout-close></div>
     <div class="checkout-card" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
       <button class="checkout-close" data-checkout-close type="button" aria-label="Закрыть">×</button>
-      <div class="eyebrow">Оформление запроса</div>
+      <div class="eyebrow">Оформление</div>
       <h3 id="checkout-title">Заказ</h3>
       <div class="checkout-price" id="checkout-price"></div>
       <label class="checkline">
@@ -85,7 +85,7 @@
         <span>Я ознакомлен(а) с <a href="privacy.html" target="_blank" rel="noopener">Политикой обработки персональных данных</a>. Отдельное согласие будет зафиксировано при заполнении анкеты.</span>
       </label>
       <div class="checkout-note" id="recurring-note"></div>
-      <button class="btn btn-gold" id="checkout-go" type="button" aria-disabled="true">Перейти к оформлению</button>
+      <button class="btn btn-gold" id="checkout-go" type="button" aria-disabled="true">Продолжить оформление</button>
       <div class="checkout-message" id="checkout-message"></div>
     </div>`;
   document.body.appendChild(layer);
@@ -131,9 +131,13 @@
       updateGo();
       msg.classList.remove("show");
       msg.textContent = "";
+      const hasPaymentLink = Boolean(paymentMap()[current]);
       recurring.textContent = btn.dataset.recurring === "true"
-        ? "Ежемесячное участие оформляется только после отдельного явного согласия с суммой, периодичностью и условиями автопродления."
-        : "После оформления Александр Кандаков свяжется с вами для подтверждения запроса и получения необходимых данных.";
+        ? "Перед оформлением ежемесячного участия вы отдельно увидите сумму, периодичность и условия автопродления."
+        : hasPaymentLink
+          ? "После оплаты Александр Кандаков свяжется с вами, чтобы получить необходимые данные."
+          : "После подтверждения условий вы увидите контакты для оформления заказа.";
+      go.textContent = hasPaymentLink ? "Перейти к оплате" : "Показать контакты";
       layer.classList.add("open");
       document.body.classList.add("modal-open");
     });
