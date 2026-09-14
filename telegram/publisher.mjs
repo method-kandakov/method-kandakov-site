@@ -6,6 +6,7 @@ const token = process.env.TELEGRAM_BOT_TOKEN;
 const privateKey = process.env.TELEGRAM_DECRYPT_KEY;
 const publicKeyPath = new URL('./publisher-public.pem', import.meta.url);
 const clubChatPath = new URL('./club-chat.enc', import.meta.url);
+const queuePath = new URL('./queue.json', import.meta.url);
 
 if (!token) throw new Error('TELEGRAM_BOT_TOKEN is not configured.');
 if (!privateKey) throw new Error('TELEGRAM_DECRYPT_KEY is not configured.');
@@ -77,6 +78,32 @@ if (mode === 'setup') {
     disable_web_page_preview: false,
   });
   console.log(`Telegram accepted the publication (message ${sent.message_id}).`);
+} else if (mode === 'scheduled') {
+  const channel = process.env.TELEGRAM_CHANNEL;
+  if (!['main', 'club'].includes(channel)) throw new Error('Unknown scheduled channel.');
+  const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+  if (!Array.isArray(queue)) throw new Error('Telegram queue must be an array.');
+  const index = queue.findIndex((item) => item && item.channel === channel && typeof item.payload === 'string');
+  if (index === -1) {
+    console.log(`No queued ${channel} publication. Nothing was sent.`);
+    process.exit(0);
+  }
+  const payload = decryptPayload(queue[index].payload);
+  if (payload.channel !== channel) throw new Error('Encrypted payload channel does not match queue channel.');
+  if (typeof payload.message !== 'string' || !payload.message.trim()) throw new Error('Message is empty.');
+  if ([...payload.message].length > 4096) throw new Error('Message exceeds 4096 characters.');
+  const chatId = channel === 'main'
+    ? '@methodkandakov'
+    : decryptSmall(fs.readFileSync(clubChatPath, 'utf8'));
+  const sent = await telegram('sendMessage', {
+    chat_id: chatId,
+    text: payload.message,
+    parse_mode: 'HTML',
+    disable_web_page_preview: false,
+  });
+  queue.splice(index, 1);
+  fs.writeFileSync(queuePath, `${JSON.stringify(queue, null, 2)}\n`);
+  console.log(`Telegram accepted scheduled publication (message ${sent.message_id}).`);
 } else {
-  throw new Error('Use setup or publish mode.');
+  throw new Error('Use setup, publish, or scheduled mode.');
 }
