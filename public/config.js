@@ -7,6 +7,7 @@ IMPORTANT:
 - Put only public payment/subscription links here.
 - PRIVATE intentionally has no public payment link.
 */
+
 window.KANDAKOV_CONFIG = {
   contacts: {
     telegram: "https://t.me/alexandr_kandakov",
@@ -16,7 +17,7 @@ window.KANDAKOV_CONFIG = {
   // Public Prodamus payment links.
   // Leave "" until the real links are created in the Prodamus account.
   prodamus: {
-    pkch: "",
+    pkch: "https://link.payform.ru/?paymentLinkId=baa7263e-a685-4b8c-809e-a71018ef144e",
     spkch: "",
     clubMonthly: "",
     clubAnnual: ""
@@ -27,7 +28,6 @@ window.KANDAKOV_CONFIG = {
   // The site works without the widget and can use direct payment links above.
   prodamusWidgetBaseUrl: ""
 };
-
 
 /*
 FINAL COMMERCIAL CONNECTION NOTE
