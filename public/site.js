@@ -88,6 +88,16 @@
     btn.addEventListener("click", e => {
       e.preventDefault();
       current = btn.dataset.checkout;
+
+      // PKCH uses a direct Prodamus checkout without the legacy consent modal.
+      if (current === "pkch") {
+        const link = paymentMap().pkch;
+        if (link) {
+          window.location.href = link;
+          return;
+        }
+      }
+
       title.textContent = btn.dataset.title || "Оформление";
       price.textContent = btn.dataset.price || "";
       offer.checked = false; pd.checked = false; updateGo();
