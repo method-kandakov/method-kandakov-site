@@ -26,7 +26,14 @@ window.KANDAKOV_CONFIG = {
   // Optional Prodamus widget domain, for example:
   // "https://yourname.payform.ru"
   // The site works without the widget and can use direct payment links above.
-  prodamusWidgetBaseUrl: ""
+  prodamusWidgetBaseUrl: "",
+
+  questionnaires: {
+    endpoint: "https://d5dsri43hgg76pqk7l61.nnekmrav.apigw.yandexcloud.net/submit",
+    enabled: false,
+    consentVersion: "2026-09-19",
+    privacyVersion: "2026-09-19"
+  }
 };
 
 /*
