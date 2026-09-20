@@ -17,18 +17,18 @@
     }
   });
 
-  // The current site stores only the acknowledgement below in localStorage.
-  // Analytics and advertising tools must not be loaded unless a separate
-  // opt-in choice is implemented.
-  const cookieChoiceKey = "mk_cookie_notice_v1";
+  // The site uses localStorage for this acknowledgement and, on questionnaire
+  // pages, for an unfinished draft kept only on the user's device. Analytics
+  // and advertising tools must not be loaded without a separate opt-in choice.
+  const cookieChoiceKey = "mk_cookie_notice_v2";
   if (!localStorage.getItem(cookieChoiceKey)) {
     const notice = document.createElement("section");
     notice.className = "cookie-notice";
     notice.setAttribute("aria-label", "Уведомление об использовании cookie");
     notice.innerHTML = `
       <div>
-        <strong>Технические данные</strong>
-        <p>Сайт сохраняет на устройстве только отметку о закрытии этого уведомления. Рекламные и аналитические инструменты не используются.</p>
+        <strong>Локальные данные</strong>
+        <p>Сайт сохраняет на вашем устройстве отметку о закрытии уведомления и незавершённый черновик анкеты. Реклама и аналитическое отслеживание не используются.</p>
       </div>
       <div class="cookie-actions">
         <a href="cookies.html">Подробнее</a>
