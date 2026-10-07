@@ -64,10 +64,10 @@
   let current = null;
 
   const paymentMap = () => ({
-    pkch: CFG.prodamus?.pkch || "",
-    spkch: CFG.prodamus?.spkch || "",
-    clubMonthly: CFG.prodamus?.clubMonthly || "",
-    clubAnnual: CFG.prodamus?.clubAnnual || ""
+    pkch: CFG.payments?.pkch || CFG.prodamus?.pkch || "",
+    spkch: CFG.payments?.spkch || CFG.prodamus?.spkch || "",
+    clubMonthly: CFG.payments?.clubMonthly || CFG.prodamus?.clubMonthly || "",
+    clubAnnual: CFG.payments?.clubAnnual || CFG.prodamus?.clubAnnual || ""
   });
 
   function updateGo(){

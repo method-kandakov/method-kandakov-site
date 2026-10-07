@@ -99,10 +99,10 @@
   const msg = qs("#checkout-message", layer);
 
   const paymentMap = () => ({
-    pkch: CFG.prodamus?.pkch || "",
-    spkch: CFG.prodamus?.spkch || "",
-    clubMonthly: CFG.prodamus?.clubMonthly || "",
-    clubAnnual: CFG.prodamus?.clubAnnual || ""
+    pkch: CFG.payments?.pkch || CFG.prodamus?.pkch || "",
+    spkch: CFG.payments?.spkch || CFG.prodamus?.spkch || "",
+    clubMonthly: CFG.payments?.clubMonthly || CFG.prodamus?.clubMonthly || "",
+    clubAnnual: CFG.payments?.clubAnnual || CFG.prodamus?.clubAnnual || ""
   });
 
   function updateGo(){
@@ -156,7 +156,7 @@
     msg.classList.add("show");
   });
 
-  // Optional Prodamus widget loader. No public secret keys are used.
+  // Legacy optional Prodamus widget loader. Retained for compatibility only.
   if (CFG.prodamusWidgetBaseUrl) {
     const base = String(CFG.prodamusWidgetBaseUrl).replace(/\/+$/,"");
     const script = document.createElement("script");
