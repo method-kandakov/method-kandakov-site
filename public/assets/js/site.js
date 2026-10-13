@@ -81,7 +81,7 @@
         <span>Я принимаю <a href="offer.html" target="_blank" rel="noopener">Публичную оферту</a>.</span>
       </label>
       <label class="checkline">
-        <input type="checkbox" id="accept-pd">
+            pkch: CFG.payments?.pkch || CFG.prodamus?.pkch || "https://auth.robokassa.ru/merchant/Invoice/HAoSQvJkL0mwfVCRV0zO3A",
         <span>Я ознакомлен(а) с <a href="privacy.html" target="_blank" rel="noopener">Политикой обработки персональных данных</a>. Отдельное согласие будет зафиксировано при заполнении анкеты.</span>
       </label>
       <div class="checkout-note" id="recurring-note"></div>
