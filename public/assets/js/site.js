@@ -81,7 +81,7 @@
         <span>Я принимаю <a href="offer.html" target="_blank" rel="noopener">Публичную оферту</a>.</span>
       </label>
       <label class="checkline">
-
+        <input type="checkbox" id="accept-pd">
         <span>Я ознакомлен(а) с <a href="privacy.html" target="_blank" rel="noopener">Политикой обработки персональных данных</a>. Отдельное согласие будет зафиксировано при заполнении анкеты.</span>
       </label>
       <div class="checkout-note" id="recurring-note"></div>
@@ -99,7 +99,9 @@
   const msg = qs("#checkout-message", layer);
 
   const paymentMap = () => ({
-    pkch: CFG.payments?.pkch || CFG.prodamus?.pkch || "",
+    // Public Robokassa checkout URL is also kept here as a safe fallback so
+    // an older cached config can never send a PKCH buyer to contacts.
+    pkch: CFG.payments?.pkch || CFG.prodamus?.pkch || "https://auth.robokassa.ru/merchant/Invoice/HAoSQvJkL0mwfVCRV0zO3A",
     spkch: CFG.payments?.spkch || CFG.prodamus?.spkch || "",
     clubMonthly: CFG.payments?.clubMonthly || CFG.prodamus?.clubMonthly || "",
     clubAnnual: CFG.payments?.clubAnnual || CFG.prodamus?.clubAnnual || ""
