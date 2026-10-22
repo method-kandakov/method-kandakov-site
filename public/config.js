@@ -18,7 +18,7 @@ window.KANDAKOV_CONFIG = {
   // store is activated. Empty links safely fall back to direct contact.
   payments: {
     pkch: "https://auth.robokassa.ru/merchant/Invoice/l0zaYrL8IUC4kF9MHhYCMQ",
-    spkch: "https://auth.robokassa.ru/Merchant/Invoice/q8OQ8wwMMEqBqzpYENqcGg",
+    spkch: "https://auth.robokassa.ru/merchant/Invoice/LVFVF5p-MEGTyir69duK4A",
     clubMonthly: "",
     clubAnnual: ""
   },
