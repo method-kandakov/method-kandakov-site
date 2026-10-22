@@ -102,7 +102,7 @@
     // Public Robokassa checkout URL is also kept here as a safe fallback so
     // an older cached config can never send a PKCH buyer to contacts.
     pkch: CFG.payments?.pkch || CFG.prodamus?.pkch || "https://auth.robokassa.ru/merchant/Invoice/l0zaYrL8IUC4kF9MHhYCMQ",
-    spkch: CFG.payments?.spkch || CFG.prodamus?.spkch || "https://auth.robokassa.ru/Merchant/Invoice/q8OQ8wwMMEqBqzpYENqcGg",
+    spkch: CFG.payments?.spkch || CFG.prodamus?.spkch || "https://auth.robokassa.ru/merchant/Invoice/LVFVF5p-MEGTyir69duK4A",
     clubMonthly: CFG.payments?.clubMonthly || CFG.prodamus?.clubMonthly || "",
     clubAnnual: CFG.payments?.clubAnnual || CFG.prodamus?.clubAnnual || ""
   });
