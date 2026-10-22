@@ -18,7 +18,7 @@ window.KANDAKOV_CONFIG = {
   // store is activated. Empty links safely fall back to direct contact.
   payments: {
     pkch: "https://auth.robokassa.ru/merchant/Invoice/l0zaYrL8IUC4kF9MHhYCMQ",
-    spkch: "",
+    spkch: "https://auth.robokassa.ru/Merchant/Invoice/q8OQ8wwMMEqBqzpYENqcGg",
     clubMonthly: "",
     clubAnnual: ""
   },
@@ -34,8 +34,7 @@ window.KANDAKOV_CONFIG = {
 /*
 FINAL COMMERCIAL CONNECTION NOTE
 The public site is ready before a payment provider is connected.
-When Robokassa issues the public payment link for PKCH, fill ONLY:
-  payments.pkch
+Public Robokassa links are configured for PKCH and SPKCH.
 Other products remain empty until their checkout is approved.
 PRIVATE intentionally stays without a public checkout.
 Never place secret keys or bank account details in this public file.
