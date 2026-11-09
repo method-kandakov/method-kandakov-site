@@ -81,4 +81,4 @@ async function sendQuestionnaire(env = process.env) {
     throw new Error('mail_not_accepted');
   }
 }
-module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, questionnaireUrl, sendQuestionnaire };
+module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, questionnaireUrl, sendQuestionnaire, verifyMailer: async () => mailer().verify() };

@@ -213,6 +213,18 @@ async function paymentResult(event) {
   }
 }
 module.exports.handler = async function handler(event) {
+  // Cloud Functions is private. Only an IAM-authorized raw invocation can run this
+  // diagnostic; API Gateway always supplies httpMethod/requestContext.
+  if (event?.controlDiagnostic === 'smtp-and-database' && !event.httpMethod && !event.requestContext) {
+    try {
+      await fulfillment.verifyMailer();
+      await controlPaid(fulfillment.settings().order);
+      return response(200, {ok:true, smtpReady:true, databaseReady:true});
+    } catch (error) {
+      const known = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT']);
+      return response(503, {ok:false, error: known.has(error.code) ? error.code : 'diagnostic_failed'});
+    }
+  }
   const method = event?.httpMethod || event?.requestContext?.http?.method || 'POST';
   if (event?.queryStringParameters?.action === 'payment') {
     if (method !== 'POST') return response(405, {ok:false, error:'method_not_allowed'});
