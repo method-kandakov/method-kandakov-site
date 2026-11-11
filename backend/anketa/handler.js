@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { Driver, getCredentialsFromEnv, TypedValues } = require('ydb-sdk');
+const { Driver, getCredentialsFromEnv, TypedValues, TypedData } = require('ydb-sdk');
 
 const ALLOWED_ORIGIN = 'https://methodkandakov.com';
 const fulfillment = require('./fulfillment');
@@ -173,6 +173,17 @@ async function controlPaid(order) {
     return Boolean(result.resultSets[0]?.rows?.length);
   });
 }
+async function notifySavedSubmission(id) {
+  const driver=await getDriver();
+  const saved=await driver.tableClient.withSessionRetry(async session=>{
+    const result=await session.executeQuery('DECLARE $id AS Utf8; SELECT * FROM submissions WHERE id=$id;',{'$id':TypedValues.utf8(id)});
+    return TypedData.createNativeObjects(result.resultSets[0])[0];
+  });
+  if(!saved) throw new Error('submission_not_found');
+  if(saved.owner_notified_at) return;
+  await fulfillment.sendSubmittedQuestionnaire(saved);
+  await driver.tableClient.withSessionRetry(async session=>session.executeQuery('DECLARE $id AS Utf8; UPDATE submissions SET owner_notified_at=CurrentUtcTimestamp() WHERE id=$id;',{'$id':TypedValues.utf8(id)}));
+}
 async function mailSent(order) {
   const driver = await getDriver();
   return driver.tableClient.withSessionRetry(async session => {
@@ -266,9 +277,11 @@ module.exports.handler = async function handler(event) {
     if (!(await controlPaid(control.order))) throw new Error('invalid_token');
     if (!data.birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(data.birthDate) || !data.birthTime || !data.birthTimeAccuracy || !data.birthPlace || !data.mainQuestion) throw new Error('required_fields');
     const id = await saveSubmission(data);
-    return response(201, { ok: true, id });
+    let ownerNotified=true;
+    try {await notifySavedSubmission(id);} catch(error) {ownerNotified=false;console.error('submission_notification_failed',{code:'notification_unavailable'});}
+    return response(201, { ok: true, id, ownerNotified });
   } catch (error) {
-    const safeErrors = new Set(['body_too_large', 'invalid_field', 'invalid_form', 'required_fields', 'invalid_token']);
+    const safeErrors = new Set(['body_too_large', 'invalid_field', 'invalid_form', 'required_fields', 'invalid_token', 'email_mismatch']);
     const code = safeErrors.has(error.message) ? error.message : 'internal_error';
     console.error('submission_failed', { code });
     return response(code === 'internal_error' ? 503 : 400, { ok: false, error: code });
