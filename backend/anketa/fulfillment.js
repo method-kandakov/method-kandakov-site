@@ -22,9 +22,10 @@ function accessToken(env = process.env) {
 function authorizeSubmission(data, env = process.env) {
   const control = settings(env);
   if (data.formType !== 'ПКЧ' || data.orderNumber !== control.order ||
-      data.email !== control.email || !secureEqual(data.accessToken, accessToken(env))) {
+      !secureEqual(data.accessToken, accessToken(env))) {
     throw new Error('invalid_token');
   }
+  if (data.email !== control.email) throw new Error('email_mismatch');
   return control;
 }
 function verifyPayment(params, env = process.env) {
@@ -115,5 +116,14 @@ async function sendQuestionnaire(env = process.env) {
     if (!owner.accepted?.some(address=>String(address).toLowerCase()===env.OWNER_NOTIFICATION_EMAIL.toLowerCase())) throw new Error('owner_mail_not_accepted');
   }
 }
-module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, providerStatus, questionnaireUrl, sendQuestionnaire, verifyMailer: async () => mailer().verify() };
+async function sendSubmittedQuestionnaire(data, env = process.env) {
+  if (!env.OWNER_NOTIFICATION_EMAIL) throw new Error('owner_mail_not_configured');
+  const date=data.birth_date instanceof Date?data.birth_date.toISOString().slice(0,10):String(data.birth_date||'');
+  const fields=[['Номер анкеты',data.id],['Заказ',data.order_number],['Продукт',data.form_type],['Имя',data.name],['Почта клиента',data.email]];
+  if(data.form_type==='ПКЧ') fields.push(['Дата рождения',date],['Местное время рождения',data.birth_time],['Точность времени',data.birth_time_accuracy],['Место рождения',data.birth_place],['Главный вопрос',data.main_question]);
+  else fields.push(['Код ПКЧ',data.pkch_code],['Задача на 90 дней',data.ninety_day_task]);
+  const result=await mailer(env).sendMail({from:env.MAIL_FROM,to:env.OWNER_NOTIFICATION_EMAIL,messageId:`<questionnaire-${data.id}@methodkandakov.com>`,subject:`Заполненная анкета ${data.form_type} — заказ №${data.order_number}`,text:'Анкета сохранена в базе. Ответы клиента:\n\n'+fields.map(([label,value])=>`${label}: ${value||'—'}`).join('\n\n')});
+  if(!result.accepted?.some(a=>String(a).toLowerCase()===env.OWNER_NOTIFICATION_EMAIL.toLowerCase()))throw new Error('owner_mail_not_accepted');
+}
+module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, providerStatus, questionnaireUrl, sendQuestionnaire, sendSubmittedQuestionnaire, verifyMailer: async () => mailer().verify() };
 
