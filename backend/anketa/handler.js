@@ -213,6 +213,9 @@ async function paymentResult(event) {
   }
 }
 module.exports.handler = async function handler(event) {
+  if (event?.controlDiagnostic === 'provider-status' && !event.httpMethod && !event.requestContext) {
+    return response(200, await fulfillment.providerStatus());
+  }
   if (event?.controlDiagnostic === 'payment-check' && !event.httpMethod && !event.requestContext) {
     return response(200, fulfillment.diagnosePayment(event.paymentBody));
   }
