@@ -21,6 +21,9 @@ const origin='https://methodkandakov.com';
 const form={formType:'ПКЧ',product:'ПКЧ',name:'Test',email:process.env.CONTROL_EMAIL,orderNumber:'12345',accessToken:flow.accessToken(),consent:true,birthDate:'1990-01-01',birthTime:'12:00',birthTimeAccuracy:'Из документа',birthPlace:'Тест',mainQuestion:'Техническая проверка'};
 const submit=data=>handler({httpMethod:'POST',headers:{origin},body:JSON.stringify(data)});
 test('full control flow requires signed payment and rejects unpaid/forged links',async()=>{
+  assert.equal((await handler({httpMethod:'POST',headers:{origin},controlDiagnostic:'fulfill-reviewed-control-order',order:'12345',reviewSource:'robokassa-merchant-ui',providerOperationId:'999'})).statusCode,400);
+  assert.equal((await handler({controlDiagnostic:'fulfill-reviewed-control-order',order:'99999',reviewSource:'robokassa-merchant-ui',providerOperationId:'999'})).statusCode,400);
+  assert.equal(paid,false);assert.equal(mailCount,0);
   assert.equal((await submit(form)).statusCode,400);
   assert.equal((await submit({...form,accessToken:'a'.repeat(64)})).statusCode,400);
   const before=dbCount;
@@ -35,3 +38,4 @@ test('full control flow requires signed payment and rejects unpaid/forged links'
   assert.equal((await submit({...form,email:'other@example.com'})).statusCode,400);
   assert.equal((await handler({httpMethod:'POST',headers:{origin:'https://other.example'},body:JSON.stringify(form)})).statusCode,403);
 });
+
