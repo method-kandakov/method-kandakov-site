@@ -66,6 +66,22 @@ function diagnosePayment(raw, env = process.env) {
   const matches = extras => secureEqual(signature, crypto.createHash(env.ROBOKASSA_HASH).update([amount, order, env.ROBOKASSA_PASSWORD2, ...extras].join(':')).digest('hex'));
   return {amountValid:/^10(?:\.0{1,6})?$/.test(amount),orderMatches:order===c.order,signatureMatches:matches(extra),signatureWithoutExtras:matches([]),hash:env.ROBOKASSA_HASH,duplicateKeys:[...p.keys()].some(k=>p.getAll(k).length!==1)};
 }
+async function providerStatus(env = process.env) {
+  const control = settings(env);
+  const merchant = env.ROBOKASSA_MERCHANT_LOGIN || 'methodkandakov';
+  const signature = crypto.createHash(env.ROBOKASSA_HASH).update([merchant,control.order,env.ROBOKASSA_PASSWORD2].join(':')).digest('hex');
+  const result = await fetch('https://auth.robokassa.ru/Merchant/WebService/Service.asmx/OpStateExt', {
+    method:'POST', headers:{'content-type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({MerchantLogin:merchant,InvoiceID:control.order,Signature:signature}),
+    signal:AbortSignal.timeout(15000)
+  });
+  const xml = await result.text();
+  const field = (section,tag) => {
+    const block=xml.match(new RegExp('<'+section+'(?:\\s[^>]*)?>([\\s\\S]*?)</'+section+'>'))?.[1] || '';
+    return block.match(new RegExp('<'+tag+'(?:\\s[^>]*)?>([^<]*)</'+tag+'>'))?.[1] || '';
+  };
+  return {httpStatus:result.status,resultCode:field('Result','Code'),stateCode:field('State','Code'),amountMatches:/^10(?:\.0{1,6})?$/.test(field('Info','OutSum'))};
+}
 function mailer(env = process.env) {
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASSWORD || !env.MAIL_FROM) {
     throw new Error('mail_not_configured');
@@ -90,5 +106,5 @@ async function sendQuestionnaire(env = process.env) {
     throw new Error('mail_not_accepted');
   }
 }
-module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, questionnaireUrl, sendQuestionnaire, verifyMailer: async () => mailer().verify() };
+module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, providerStatus, questionnaireUrl, sendQuestionnaire, verifyMailer: async () => mailer().verify() };
 
