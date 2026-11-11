@@ -105,6 +105,15 @@ async function sendQuestionnaire(env = process.env) {
   if (!result.accepted?.some(address => String(address).toLowerCase() === control.email)) {
     throw new Error('mail_not_accepted');
   }
+  if (env.OWNER_NOTIFICATION_EMAIL) {
+    const owner = await mailer(env).sendMail({
+      from:env.MAIL_FROM,to:env.OWNER_NOTIFICATION_EMAIL,
+      messageId:`<pkch-control-owner-${control.order}@methodkandakov.com>`,
+      subject:`Новый оплаченный заказ ПКЧ №${control.order}`,
+      text:`Контрольный заказ №${control.order}, сумма 10 ₽. Получатель анкеты: ${control.email}. Письмо с персональной ссылкой принято почтовым сервером. Ответы анкеты будут храниться в базе; в это письмо они не включаются. Это контрольная проверка выдачи, не подтверждение готовности общих продаж.`
+    });
+    if (!owner.accepted?.some(address=>String(address).toLowerCase()===env.OWNER_NOTIFICATION_EMAIL.toLowerCase())) throw new Error('owner_mail_not_accepted');
+  }
 }
 module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, providerStatus, questionnaireUrl, sendQuestionnaire, verifyMailer: async () => mailer().verify() };
 
