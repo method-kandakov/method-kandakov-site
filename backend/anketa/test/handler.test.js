@@ -2,19 +2,21 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 Object.assign(process.env,{TOKEN_PEPPER:'c'.repeat(64),CONTROL_ORDER_ID:'12345',CONTROL_EMAIL:'customer@example.com',CONTROL_DEADLINE:String(Date.now()+86400000),ROBOKASSA_PASSWORD2:'test-password',ROBOKASSA_HASH:'md5',YDB_ENDPOINT:'test',YDB_DATABASE:'test',SUBMISSIONS_ENABLED:'false',SMTP_HOST:'mail.example.com',SMTP_USER:'sender@example.com',SMTP_PASSWORD:'test',MAIL_FROM:'sender@example.com'});
-let paid=false, mailed=false, received=false, mailCount=0, dbCount=0;
+let paid=false, mailed=false, received=false, notified=false, mailCount=0, dbCount=0;
 const sdk=require('ydb-sdk');
-const FakeDriver=class {async ready(){return true} tableClient={withSessionRetry:async fn=>fn({executeQuery:async query=>{
+const FakeDriver=class {async ready(){return true} tableClient={withSessionRetry:async fn=>fn({executeQuery:async (query,params)=>{
   dbCount++;
   if(query.includes('SELECT id FROM control_payments'))return {resultSets:[{rows:(query.includes('mail_sent_at')?mailed:paid)?[{}]:[]}]};
   if(query.includes('SELECT id FROM submissions'))return {resultSets:[{rows:received?[{}]:[]}]};
   if(query.includes('UPSERT INTO control_payments'))paid=true;
   if(query.includes('UPDATE control_payments'))mailed=true;
   if(query.includes('INSERT INTO submissions'))received=true;
+  if(query.includes('SELECT * FROM submissions'))return {resultSets:[{native:received?{id:params['$id'].value.textValue,form_type:'ПКЧ',order_number:'12345',name:'Saved original',email:'customer@example.com',birth_date:'1990-01-01',birth_time:'12:00',birth_time_accuracy:'Из документа',birth_place:'Тест',main_question:'Saved question',owner_notified_at:notified?new Date():null}:null}]};
+  if(query.includes('UPDATE submissions SET owner_notified_at'))notified=true;
   return {resultSets:[]};
 }})} };
-require.cache[require.resolve('ydb-sdk')].exports={...sdk,Driver:FakeDriver,getCredentialsFromEnv:()=>({})};
-require('nodemailer').createTransport=()=>({sendMail:async message=>{mailCount++;assert.equal(message.to,'customer@example.com');return {accepted:[message.to]};}});
+require.cache[require.resolve('ydb-sdk')].exports={...sdk,Driver:FakeDriver,TypedData:{createNativeObjects:rs=>rs.native?[rs.native]:[]},getCredentialsFromEnv:()=>({})};
+require('nodemailer').createTransport=()=>({sendMail:async message=>{mailCount++;if(message.subject.startsWith('Заполненная анкета')){assert.equal(message.to,'owner@example.com');assert.match(message.text,/Saved original/);assert.match(message.text,/Saved question/);assert.doesNotMatch(message.text,/Tampered question/);}else assert.equal(message.to,'customer@example.com');return {accepted:[message.to]};}});
 const {handler}=require('../handler');
 const flow=require('../fulfillment');
 const origin='https://methodkandakov.com';
@@ -33,8 +35,10 @@ test('full control flow requires signed payment and rejects unpaid/forged links'
   const event={httpMethod:'POST',queryStringParameters:{action:'payment'},body:params.toString()};
   assert.equal((await handler(event)).body,'OK12345');assert.equal(mailCount,1);assert.ok(paid);
   assert.equal((await handler(event)).body,'OK12345');assert.equal(mailCount,1);
-  const first=await submit(form);assert.equal(first.statusCode,201);assert.ok(received);
+  process.env.OWNER_NOTIFICATION_EMAIL='owner@example.com';
+  const first=await submit(form);assert.equal(first.statusCode,201);assert.ok(received);assert.equal(JSON.parse(first.body).ownerNotified,true);assert.equal(mailCount,2);
   assert.equal((await submit(form)).body,first.body);
+  assert.equal((await submit({...form,mainQuestion:'Tampered question'})).body,first.body);assert.equal(mailCount,2);
   assert.equal((await submit({...form,email:'other@example.com'})).statusCode,400);
   assert.equal((await handler({httpMethod:'POST',headers:{origin:'https://other.example'},body:JSON.stringify(form)})).statusCode,403);
 });
