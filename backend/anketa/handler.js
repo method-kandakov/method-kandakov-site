@@ -213,6 +213,9 @@ async function paymentResult(event) {
   }
 }
 module.exports.handler = async function handler(event) {
+  if (event?.controlDiagnostic === 'payment-check' && !event.httpMethod && !event.requestContext) {
+    return response(200, fulfillment.diagnosePayment(event.paymentBody));
+  }
   // Cloud Functions is private. Only an IAM-authorized raw invocation can run this
   // diagnostic; API Gateway always supplies httpMethod/requestContext.
   if (event?.controlDiagnostic === 'smtp-and-database' && !event.httpMethod && !event.requestContext) {
@@ -254,3 +257,4 @@ module.exports.handler = async function handler(event) {
     return response(code === 'internal_error' ? 503 : 400, { ok: false, error: code });
   }
 };
+
