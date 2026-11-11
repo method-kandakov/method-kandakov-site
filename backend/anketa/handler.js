@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { Driver, getCredentialsFromEnv, TypedValues } = require('ydb-sdk');
 
-const ALLOWED_ORIGIN = 'https://anketa.methodkandakov.com';
+const ALLOWED_ORIGIN = 'https://methodkandakov.com';
 const fulfillment = require('./fulfillment');
 const MAX_BODY_BYTES = 20 * 1024;
 let driverPromise;
@@ -216,13 +216,19 @@ module.exports.handler = async function handler(event) {
   // Cloud Functions is private. Only an IAM-authorized raw invocation can run this
   // diagnostic; API Gateway always supplies httpMethod/requestContext.
   if (event?.controlDiagnostic === 'smtp-and-database' && !event.httpMethod && !event.requestContext) {
+    let stage = 'smtp';
     try {
       await fulfillment.verifyMailer();
-      await controlPaid(fulfillment.settings().order);
+      stage = 'configuration';
+      const control = fulfillment.settings();
+      stage = 'database';
+      await controlPaid(control.order);
       return response(200, {ok:true, smtpReady:true, databaseReady:true});
     } catch (error) {
-      const known = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT']);
-      return response(503, {ok:false, error: known.has(error.code) ? error.code : 'diagnostic_failed'});
+      const known = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ENOTFOUND', 'ESOCKET', 'ECONNREFUSED', 'ECONNRESET', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID']);
+      const classes = new Set(['Error','TypeError','Unauthenticated','Unauthorized','BadRequest','SchemeError','Overloaded','Unavailable','Timeout','SessionPoolEmpty','TransportUnavailable']);
+      const causes = ['database_not_configured','database_unavailable'].includes(error.message) ? error.message : undefined;
+      return response(503, {ok:false, stage, error: known.has(error.code) ? error.code : 'diagnostic_failed', errorClass:classes.has(error.constructor?.name)?error.constructor.name:'Other', cause:causes});
     }
   }
   const method = event?.httpMethod || event?.requestContext?.http?.method || 'POST';
