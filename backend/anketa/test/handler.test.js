@@ -17,7 +17,7 @@ require.cache[require.resolve('ydb-sdk')].exports={...sdk,Driver:FakeDriver,getC
 require('nodemailer').createTransport=()=>({sendMail:async message=>{mailCount++;assert.equal(message.to,'customer@example.com');return {accepted:[message.to]};}});
 const {handler}=require('../handler');
 const flow=require('../fulfillment');
-const origin='https://anketa.methodkandakov.com';
+const origin='https://methodkandakov.com';
 const form={formType:'ПКЧ',product:'ПКЧ',name:'Test',email:process.env.CONTROL_EMAIL,orderNumber:'12345',accessToken:flow.accessToken(),consent:true,birthDate:'1990-01-01',birthTime:'12:00',birthTimeAccuracy:'Из документа',birthPlace:'Тест',mainQuestion:'Техническая проверка'};
 const submit=data=>handler({httpMethod:'POST',headers:{origin},body:JSON.stringify(data)});
 test('full control flow requires signed payment and rejects unpaid/forged links',async()=>{
