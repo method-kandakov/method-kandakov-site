@@ -23,5 +23,11 @@ Do not enable general sales merely because this recovery succeeds.
 
 Private diagnostics `payment-check` and `provider-status` return verification
 flags/status codes only; they neither mark orders paid nor send messages.
+After a questionnaire is saved, its canonical database record is mailed to
+OWNER_NOTIFICATION_EMAIL, including the filled answers. The customer's access
+token and its hash are excluded. owner_notified_at is set only after SMTP accepts
+that message. Repeated submissions reuse the saved answers and do not replace
+them with values from a retry. If mailing fails, the API still confirms storage
+with ownerNotified=false; it does not claim that a queue or background retry exists.
 Never publish real callback bodies, passwords, customer emails or access tokens
 in this repository.
