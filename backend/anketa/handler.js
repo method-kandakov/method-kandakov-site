@@ -184,13 +184,17 @@ async function recordMail(order) {
   const driver = await getDriver();
   await driver.tableClient.withSessionRetry(async session => session.executeQuery('DECLARE $id AS Utf8; UPDATE control_payments SET mail_sent_at = CurrentUtcTimestamp() WHERE id = $id;', {'$id': TypedValues.utf8(order)}));
 }
-async function recordPayment(order) {
+async function recordPayment(order, proof) {
   const driver = await getDriver();
   await driver.tableClient.withSessionRetry(async session => session.executeQuery(`
     DECLARE $id AS Utf8;
     UPSERT INTO control_payments (id, paid_at, retention_until)
     VALUES ($id, CurrentUtcTimestamp(), CurrentUtcTimestamp() + Interval("P180D"));
   `, {'$id': TypedValues.utf8(order)}));
+  if (proof) await driver.tableClient.withSessionRetry(async session=>session.executeQuery(
+    'DECLARE $id AS Utf8; DECLARE $source AS Utf8; DECLARE $operation AS Utf8; UPDATE control_payments SET verification_source=$source, provider_operation_id=$operation WHERE id=$id;',
+    {'$id':TypedValues.utf8(order),'$source':TypedValues.utf8('manual_merchant_review'),'$operation':TypedValues.utf8(proof)}
+  ));
 }
 async function paymentResult(event) {
   try {
@@ -213,6 +217,16 @@ async function paymentResult(event) {
   }
 }
 module.exports.handler = async function handler(event) {
+  // Recovery of this single paid control order requires an IAM-authorized operator
+  // who has independently reviewed the successful operation in the merchant UI.
+  // Public callback verification remains unchanged.
+  if (event?.controlDiagnostic === 'fulfill-reviewed-control-order' && !event.httpMethod && !event.requestContext) {
+    const control=fulfillment.settings();
+    if (event.order!==control.order || event.reviewSource!=='robokassa-merchant-ui' || !/^\d{1,20}$/.test(event.providerOperationId||'')) return response(400,{ok:false,error:'invalid_review'});
+    await recordPayment(control.order,event.providerOperationId);
+    if (!(await mailSent(control.order))) {await fulfillment.sendQuestionnaire(); await recordMail(control.order);}
+    return response(200,{ok:true,verificationSource:'manual_merchant_review',mailSent:true});
+  }
   if (event?.controlDiagnostic === 'provider-status' && !event.httpMethod && !event.requestContext) {
     return response(200, await fulfillment.providerStatus());
   }
