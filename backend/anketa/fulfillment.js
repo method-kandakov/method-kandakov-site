@@ -52,7 +52,7 @@ function verifyPayment(params, env = process.env) {
 }
 function questionnaireUrl(env = process.env) {
   const control = settings(env);
-  const url = new URL('https://anketa.methodkandakov.com/anketa-pkch.html');
+  const url = new URL('https://methodkandakov.com/anketa-pkch');
   url.searchParams.set('order', control.order);
   url.searchParams.set('token', accessToken(env));
   return url.href;
