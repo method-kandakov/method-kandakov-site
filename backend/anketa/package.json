@@ -1,1 +1,1 @@
-{"name":"method-kandakov-anketa-api","version":"1.1.0","private":true,"main":"handler.js","scripts":{"test":"node --test test/*.test.js"},"dependencies":{"nodemailer":"10.4.0","ydb-sdk":"5.11.1"}}
+{"name":"method-kandakov-anketa-api","version":"1.1.0","private":true,"main":"handler.js","scripts":{"test":"node --test test/*.test.js"},"dependencies":{"@yandex-cloud/nodejs-sdk":"2.7.7","nodemailer":"10.4.0","ydb-sdk":"5.11.1"}}
