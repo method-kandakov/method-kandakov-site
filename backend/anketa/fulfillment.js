@@ -57,6 +57,15 @@ function questionnaireUrl(env = process.env) {
   url.searchParams.set('token', accessToken(env));
   return url.href;
 }
+function diagnosePayment(raw, env = process.env) {
+  const p = new URLSearchParams(raw);
+  const c = settings(env);
+  const amount = p.get('OutSum') || '', order = p.get('InvId') || '';
+  const signature = (p.get('SignatureValue') || '').toLowerCase();
+  const extra = [...p.keys()].filter(k => /^shp_/i.test(k)).sort().map(k => `${k}=${p.get(k)}`);
+  const matches = extras => secureEqual(signature, crypto.createHash(env.ROBOKASSA_HASH).update([amount, order, env.ROBOKASSA_PASSWORD2, ...extras].join(':')).digest('hex'));
+  return {amountValid:/^10(?:\.0{1,6})?$/.test(amount),orderMatches:order===c.order,signatureMatches:matches(extra),signatureWithoutExtras:matches([]),hash:env.ROBOKASSA_HASH,duplicateKeys:[...p.keys()].some(k=>p.getAll(k).length!==1)};
+}
 function mailer(env = process.env) {
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASSWORD || !env.MAIL_FROM) {
     throw new Error('mail_not_configured');
@@ -81,4 +90,5 @@ async function sendQuestionnaire(env = process.env) {
     throw new Error('mail_not_accepted');
   }
 }
-module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, questionnaireUrl, sendQuestionnaire, verifyMailer: async () => mailer().verify() };
+module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, questionnaireUrl, sendQuestionnaire, verifyMailer: async () => mailer().verify() };
+
