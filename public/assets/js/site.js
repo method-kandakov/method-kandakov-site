@@ -76,6 +76,11 @@
       <div class="eyebrow">Оформление</div>
       <h3 id="checkout-title">Заказ</h3>
       <div class="checkout-price" id="checkout-price"></div>
+      <div id="checkout-email-wrap" hidden style="margin:16px 0">
+        <label for="checkout-email">Почта для персональной анкеты и результата</label>
+        <input id="checkout-email" type="email" autocomplete="email" maxlength="254" placeholder="name@example.com" style="display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:12px;background:#111;color:#fff;border:1px solid #bfa15b;border-radius:8px">
+        <small>Проверьте адрес: после оплаты на него придёт ссылка на анкету.</small>
+      </div>
       <label class="checkline">
         <input type="checkbox" id="accept-offer">
         <span>Я принимаю <a href="offer.html" target="_blank" rel="noopener">Публичную оферту</a>.</span>
@@ -97,6 +102,10 @@
   const recurring = qs("#recurring-note", layer);
   const go = qs("#checkout-go", layer);
   const msg = qs("#checkout-message", layer);
+  const checkoutEmail=qs('#checkout-email',layer);
+  const emailWrap=qs('#checkout-email-wrap',layer);
+  let requestKey=null;
+  const automaticPKCH=()=>current==='pkch'&&CFG.checkout?.enabled===true;
 
   const paymentMap = () => ({
     // Public Robokassa checkout URL is also kept here as a safe fallback so
@@ -108,11 +117,12 @@
   });
 
   function updateGo(){
-    const ok = offer.checked && pd.checked;
+    const ok = offer.checked && pd.checked && (!automaticPKCH()||(checkoutEmail.value.trim()&&checkoutEmail.checkValidity()));
     go.setAttribute("aria-disabled", ok ? "false" : "true");
   }
   offer.addEventListener("change", updateGo);
   pd.addEventListener("change", updateGo);
+  checkoutEmail.addEventListener('input',()=>{requestKey=null;updateGo();});
 
   let current = null;
   function closeCheckout(){
@@ -126,6 +136,8 @@
     btn.addEventListener("click", e => {
       e.preventDefault();
       current = btn.dataset.checkout;
+      requestKey=null;
+      emailWrap.hidden=!automaticPKCH();
       title.textContent = btn.dataset.title || "Оформление";
       price.textContent = btn.dataset.price || "";
       offer.checked = false;
@@ -139,14 +151,30 @@
         : hasPaymentLink
           ? "После оплаты Александр Кандаков свяжется с вами, чтобы получить необходимые данные."
           : "После подтверждения условий вы увидите контакты для оформления заказа.";
+      if(automaticPKCH())recurring.textContent='После подтверждения оплаты на указанную почту придёт персональная ссылка на анкету ПКЧ.';
       go.textContent = hasPaymentLink ? "Перейти к оплате" : "Показать контакты";
       layer.classList.add("open");
       document.body.classList.add("modal-open");
     });
   });
 
-  go.addEventListener("click", () => {
+  go.addEventListener("click", async () => {
     if (go.getAttribute("aria-disabled") === "true") return;
+    if(automaticPKCH()) {
+      go.disabled=true;go.textContent='Создаём заказ…';
+      requestKey ||= crypto.randomUUID();
+      try {
+        const response=await fetch(CFG.checkout.endpoint+'?action=checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({product:'pkch',email:checkoutEmail.value.trim(),requestKey,acceptOffer:offer.checked,acceptPrivacy:pd.checked})});
+        const result=await response.json();
+        if(!response.ok||!result.ok)throw Error(result.error||'checkout_unavailable');
+        if(result.alreadyPaid){window.location.href='checkout-status.html?order='+encodeURIComponent(result.order)+'&key='+encodeURIComponent(result.statusToken);return;}
+        if(result.action!=='https://auth.robokassa.ru/Merchant/Index.aspx'||result.method!=='POST'||!result.fields)throw Error('checkout_unavailable');
+        const form=document.createElement('form');form.method='POST';form.action=result.action;
+        Object.entries(result.fields).forEach(([name,value])=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value);form.appendChild(input);});
+        document.body.appendChild(form);form.submit();
+      }catch(error){msg.textContent=error.message==='invalid_email'?'Проверьте адрес электронной почты.':'Не удалось подготовить оплату. Попробуйте ещё раз: повторный запрос использует тот же заказ.';msg.classList.add('show');go.disabled=false;go.textContent='Перейти к оплате';}
+      return;
+    }
     const link = paymentMap()[current] || "";
     if (link) {
       window.location.href = link;

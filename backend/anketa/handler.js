@@ -5,6 +5,7 @@ const ALLOWED_ORIGIN = 'https://methodkandakov.com';
 const fulfillment = require('./fulfillment');
 const MAX_BODY_BYTES = 20 * 1024;
 let driverPromise;
+const orderFlow=require('./orders').service({store:require('./order-store')(getDriver),mail:fulfillment});
 
 function response(statusCode, body, origin = ALLOWED_ORIGIN) {
   return {
@@ -212,6 +213,10 @@ async function paymentResult(event) {
     const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : String(event.body || '');
     if (Buffer.byteLength(raw) > MAX_BODY_BYTES) throw new Error('body_too_large');
     const params = new URLSearchParams(raw);
+    if(params.has('Shp_order')) {
+      const order=await orderFlow.payment(params);
+      return {statusCode:200,headers:{'content-type':'text/plain; charset=utf-8','cache-control':'no-store'},body:'OK'+order};
+    }
     const control = fulfillment.verifyPayment(params);
     // Persist payment before mailing: no link can be used without a verified paid record.
     await recordPayment(control.order);
@@ -228,6 +233,25 @@ async function paymentResult(event) {
   }
 }
 module.exports.handler = async function handler(event) {
+  if(event?.controlDiagnostic==='production-preflight'&&!event.httpMethod&&!event.requestContext) {
+    const driver=await getDriver();
+    await driver.tableClient.withSessionRetry(session=>session.executeQuery('SELECT id,request_key,email,product,amount_minor,status,created_ms,deadline_ms,offer_version,privacy_version,paid_at,link_sent_at,owner_order_notified_at,delivery_retry_at,retention_until FROM orders LIMIT 0; SELECT id,owner_notified_at,notification_retry_at FROM submissions LIMIT 0;'));
+    await fulfillment.verifyMailer();
+    return response(200,{ok:true,databaseReady:true,smtpReady:true,password1Present:Boolean(process.env.ROBOKASSA_PASSWORD1),password2Present:Boolean(process.env.ROBOKASSA_PASSWORD2),salesEnabled:process.env.PKCH_SALES_ENABLED==='true'});
+  }
+  if(event?.controlDiagnostic==='create-checkout-control'&&!event.httpMethod&&!event.requestContext) {
+    return response(200,{ok:true,...await orderFlow.createControl({product:'pkch',email:process.env.CONTROL_EMAIL,requestKey:crypto.randomUUID(),acceptOffer:true,acceptPrivacy:true})});
+  }
+  const timer=event?.messages?.[0]?.event_metadata?.event_type==='yandex.cloud.events.serverless.triggers.TimerMessage';
+  if((event?.controlDiagnostic==='retry-pending-delivery'||timer)&&!event.httpMethod&&!event.requestContext) {
+    const delivery=await orderFlow.retry();
+    if(delivery.checked)return response(200,{ok:true,orders:delivery,questionnaires:{checked:0,failed:0}});
+    const driver=await getDriver();
+    const result=await driver.tableClient.withSessionRetry(session=>session.executeQuery('SELECT id FROM submissions WHERE status="received" AND owner_notified_at IS NULL AND (notification_retry_at IS NULL OR notification_retry_at<CurrentUtcTimestamp()) LIMIT 1;'));
+    let failed=0;
+    for(const row of TypedData.createNativeObjects(result.resultSets[0])){await driver.tableClient.withSessionRetry(session=>session.executeQuery('DECLARE $id AS Utf8; UPDATE submissions SET notification_retry_at=CurrentUtcTimestamp()+Interval("PT5M") WHERE id=$id;',{'$id':TypedValues.utf8(row.id)}));try{await notifySavedSubmission(row.id);}catch{failed++;}}
+    return response(200,{ok:true,orders:delivery,questionnaires:{checked:result.resultSets[0]?.rows?.length||0,failed}});
+  }
   // Recovery of this single paid control order requires an IAM-authorized operator
   // who has independently reviewed the successful operation in the merchant UI.
   // Public callback verification remains unchanged.
@@ -271,10 +295,19 @@ module.exports.handler = async function handler(event) {
   if (method === 'OPTIONS') return response(204, null);
   if (method !== 'POST') return response(405, { ok: false, error: 'method_not_allowed' });
   if (origin !== ALLOWED_ORIGIN) return response(403, { ok: false, error: 'origin_not_allowed' });
+  if(['checkout','status'].includes(event?.queryStringParameters?.action)) {
+    try {
+      const input=parseBody(event);
+      const result=event.queryStringParameters.action==='checkout'?await orderFlow.create(input):await orderFlow.status(input);
+      return response(200,{ok:true,...result});
+    }catch(error){const codes=new Set(['sales_disabled','sales_not_configured','invalid_email','invalid_checkout','checkout_conflict','invalid_token']);const code=codes.has(error.message)?error.message:'checkout_unavailable';return response(['invalid_email','invalid_checkout','invalid_token'].includes(code)?400:code==='checkout_conflict'?409:503,{ok:false,error:code});}
+  }
   try {
     const data = validate(parseBody(event));
-    const control = fulfillment.authorizeSubmission(data);
-    if (!(await controlPaid(control.order))) throw new Error('invalid_token');
+    if(data.orderNumber===process.env.CONTROL_ORDER_ID) {
+      const control=fulfillment.authorizeSubmission(data);
+      if(!(await controlPaid(control.order)))throw Error('invalid_token');
+    } else await orderFlow.submission(data);
     if (!data.birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(data.birthDate) || !data.birthTime || !data.birthTimeAccuracy || !data.birthPlace || !data.mainQuestion) throw new Error('required_fields');
     const id = await saveSubmission(data);
     let ownerNotified=true;

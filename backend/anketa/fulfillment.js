@@ -125,5 +125,16 @@ async function sendSubmittedQuestionnaire(data, env = process.env) {
   const result=await mailer(env).sendMail({from:env.MAIL_FROM,to:env.OWNER_NOTIFICATION_EMAIL,messageId:`<questionnaire-${data.id}@methodkandakov.com>`,subject:`Заполненная анкета ${data.form_type} — заказ №${data.order_number}`,text:'Анкета сохранена в базе. Ответы клиента:\n\n'+fields.map(([label,value])=>`${label}: ${value||'—'}`).join('\n\n')});
   if(!result.accepted?.some(a=>String(a).toLowerCase()===env.OWNER_NOTIFICATION_EMAIL.toLowerCase()))throw new Error('owner_mail_not_accepted');
 }
-module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, providerStatus, questionnaireUrl, sendQuestionnaire, sendSubmittedQuestionnaire, verifyMailer: async () => mailer().verify() };
+async function sendAccepted(message,recipient,env=process.env) {
+  const result=await mailer(env).sendMail({...message,from:env.MAIL_FROM,to:recipient});
+  if(!result.accepted?.some(a=>String(a).toLowerCase()===recipient.toLowerCase()))throw Error('mail_not_accepted');
+}
+async function sendOrderLink(row,url,env=process.env) {
+  await sendAccepted({messageId:`<pkch-link-${row.id}@methodkandakov.com>`,subject:'Ваша анкета ПКЧ — заказ №'+row.id,text:`Оплата заказа №${row.id} подтверждена.\n\nЗаполните анкету по персональной ссылке:\n${url}\n\nСсылка предназначена только для вас. После отправки вы увидите номер принятой анкеты.\n\nМетод Кандакова`},row.email,env);
+}
+async function sendOrderNotice(row,env=process.env) {
+  if(!env.OWNER_NOTIFICATION_EMAIL)throw Error('owner_mail_not_configured');
+  await sendAccepted({messageId:`<pkch-order-${row.id}@methodkandakov.com>`,subject:'Новый оплаченный заказ ПКЧ №'+row.id,text:`Заказ №${row.id}.\nСумма: ${(Number(row.amount_minor)/100).toFixed(2)} ₽.\nПочта клиента: ${row.email}.\n\nПерсональная анкета отправлена клиенту. Когда он заполнит её, придёт отдельное письмо с ответами.`},env.OWNER_NOTIFICATION_EMAIL,env);
+}
+module.exports = { secureEqual, settings, accessToken, authorizeSubmission, verifyPayment, diagnosePayment, providerStatus, questionnaireUrl, sendQuestionnaire, sendSubmittedQuestionnaire, sendOrderLink, sendOrderNotice, verifyMailer: async () => mailer().verify() };
 
