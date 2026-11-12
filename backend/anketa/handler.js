@@ -121,7 +121,7 @@ async function saveSubmission(data) {
         $birth_time, $birth_time_accuracy, $birth_place, $main_question,
         $product, $order_number, $access_token_hash, $consent_version,
         $privacy_version, CurrentUtcTimestamp(), CurrentUtcTimestamp(),
-        CurrentUtcTimestamp() + Interval("P180D")
+        Unwrap(CurrentUtcTimestamp() + Interval("P180D"))
       );
     `;
     params = {
@@ -147,7 +147,7 @@ async function saveSubmission(data) {
         $id, $form_type, $status, $name, $email, $pkch_code, $ninety_day_task,
         $product, $order_number, $access_token_hash, $consent_version,
         $privacy_version, CurrentUtcTimestamp(), CurrentUtcTimestamp(),
-        CurrentUtcTimestamp() + Interval("P180D")
+        Unwrap(CurrentUtcTimestamp() + Interval("P180D"))
       );
     `;
     params = {
@@ -200,7 +200,7 @@ async function recordPayment(order, proof) {
   await driver.tableClient.withSessionRetry(async session => session.executeQuery(`
     DECLARE $id AS Utf8;
     UPSERT INTO control_payments (id, paid_at, retention_until)
-    VALUES ($id, CurrentUtcTimestamp(), CurrentUtcTimestamp() + Interval("P180D"));
+    VALUES ($id, CurrentUtcTimestamp(), Unwrap(CurrentUtcTimestamp() + Interval("P180D")));
   `, {'$id': TypedValues.utf8(order)}));
   if (proof) await driver.tableClient.withSessionRetry(async session=>session.executeQuery(
     'DECLARE $id AS Utf8; DECLARE $source AS Utf8; DECLARE $operation AS Utf8; UPDATE control_payments SET verification_source=$source, provider_operation_id=$operation WHERE id=$id;',
