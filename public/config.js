@@ -23,6 +23,12 @@ window.KANDAKOV_CONFIG = {
     clubAnnual: ""
   },
 
+  // Activate only after current integration keys and an automatic real payment are verified.
+  checkout: {
+    enabled: false,
+    endpoint: "https://d5dsri43hgg76pqk7l61.nnekmrav.apigw.yandexcloud.net/submit"
+  },
+
   questionnaires: {
     endpoint: "https://d5dsri43hgg76pqk7l61.nnekmrav.apigw.yandexcloud.net/submit",
     enabled: false,
