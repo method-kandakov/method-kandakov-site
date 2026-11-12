@@ -233,6 +233,12 @@ async function paymentResult(event) {
   }
 }
 module.exports.handler = async function handler(event) {
+  if(event?.controlDiagnostic==='production-preflight'&&!event.httpMethod&&!event.requestContext) {
+    const driver=await getDriver();
+    await driver.tableClient.withSessionRetry(session=>session.executeQuery('SELECT id,request_key,email,product,amount_minor,status,created_ms,deadline_ms,offer_version,privacy_version,paid_at,link_sent_at,owner_order_notified_at,delivery_retry_at,retention_until FROM orders LIMIT 0; SELECT id,owner_notified_at,notification_retry_at FROM submissions LIMIT 0;'));
+    await fulfillment.verifyMailer();
+    return response(200,{ok:true,databaseReady:true,smtpReady:true,password1Present:Boolean(process.env.ROBOKASSA_PASSWORD1),password2Present:Boolean(process.env.ROBOKASSA_PASSWORD2),salesEnabled:process.env.PKCH_SALES_ENABLED==='true'});
+  }
   if(event?.controlDiagnostic==='create-checkout-control'&&!event.httpMethod&&!event.requestContext) {
     return response(200,{ok:true,...await orderFlow.createControl({product:'pkch',email:process.env.CONTROL_EMAIL,requestKey:crypto.randomUUID(),acceptOffer:true,acceptPrivacy:true})});
   }
