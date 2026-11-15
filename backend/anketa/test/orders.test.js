@@ -1,9 +1,9 @@
 'use strict';
 const {test}=require('node:test');const assert=require('node:assert/strict');const crypto=require('node:crypto');
 const flow=require('../orders');
-const env={TOKEN_PEPPER:'test-only-pepper-'.repeat(4),ROBOKASSA_PASSWORD1:'test-only-one',ROBOKASSA_PASSWORD2:'test-only-two',ROBOKASSA_HASH:'sha256',PKCH_SALES_ENABLED:'true'};
+const env={TOKEN_PEPPER:'test-only-pepper-'.repeat(4),ROBOKASSA_PASSWORD1:'test-only-one',ROBOKASSA_PASSWORD2:'test-only-two',ROBOKASSA_HASH:'sha256',PKCH_SALES_ENABLED:'true',SPKCH_SALES_ENABLED:'true'};
 const input=(email='one@example.com',requestKey='checkout-request-one-12345')=>({product:'pkch',email,requestKey,acceptOffer:true,acceptPrivacy:true});
-function payment(row,extra={}){const p=new URLSearchParams({OutSum:'14900.000000',InvId:row.id,Shp_order:row.id,Shp_product:'pkch',...extra});const extras=[...p.keys()].filter(k=>/^shp_/i.test(k)).sort().map(k=>k+'='+p.get(k));p.set('SignatureValue',crypto.createHash('sha256').update([p.get('OutSum'),row.id,env.ROBOKASSA_PASSWORD2,...extras].join(':')).digest('hex'));return p;}
+function payment(row,extra={}){const p=new URLSearchParams({OutSum:(row.amount_minor/100).toFixed(6),InvId:row.id,Shp_order:row.id,Shp_product:row.product,...extra});const extras=[...p.keys()].filter(k=>/^shp_/i.test(k)).sort().map(k=>k+'='+p.get(k));p.set('SignatureValue',crypto.createHash('sha256').update([p.get('OutSum'),row.id,env.ROBOKASSA_PASSWORD2,...extras].join(':')).digest('hex'));return p;}
 function rig(){const rows=new Map(),sent=[];let failOwner=false;const store={get:async id=>rows.get(id),create:async row=>{if(!rows.has(row.id))rows.set(row.id,{...row});return rows.get(row.id);},paid:async id=>{rows.get(id).status='paid';},mark:async(id,col)=>{rows.get(id)[col]=new Date();},defer:async id=>{rows.get(id).delivery_retry_at=new Date(Date.now()+300000);},pendingMail:async()=>[...rows.values()].filter(r=>r.status==='paid'&&(!r.link_sent_at||!r.owner_order_notified_at))};const mail={sendOrderLink:async(row,url)=>sent.push({type:'client',to:row.email,url}),sendOrderNotice:async row=>{if(failOwner)throw Error('smtp');sent.push({type:'owner',order:row.id});}};return {rows,sent,service:flow.service({store,mail,env}),failOwner:value=>{failOwner=value;}};}
 test('checkout binds two separate customers, fixed price and independent capabilities',async()=>{const r=rig();const a=await r.service.create(input());const b=await r.service.create(input('two@example.com','checkout-request-two-12345'));assert.notEqual(a.order,b.order);assert.equal(a.fields.OutSum,'14900.00');assert.equal(a.fields.Email,'one@example.com');assert.equal(b.fields.Email,'two@example.com');assert.equal(a.fields.Shippable,undefined);assert.equal(a.fields.IsTest,undefined);assert.ok(!JSON.stringify(a).includes(env.ROBOKASSA_PASSWORD1));await assert.rejects(r.service.status({order:a.order,statusToken:b.statusToken}),/invalid_token/);assert.deepEqual(await r.service.status({order:a.order,statusToken:a.statusToken}),{order:a.order,paid:false,emailSent:false});});
 test('request retries reuse the order and reject reassignment of its email',async()=>{const r=rig();const a=await r.service.create(input());const again=await r.service.create(input());assert.equal(a.order,again.order);assert.equal(r.rows.size,1);await assert.rejects(r.service.create(input('other@example.com')),/checkout_conflict/);});
@@ -14,3 +14,48 @@ test('closed checkout and expired capabilities fail without affecting existing c
 
 test('IAM technical checkout remains fixed at 10 RUB and bound to the configured owner email',async()=>{const rows=new Map();const store={create:async r=>{rows.set(r.id,r);return r;}};const service=flow.service({store,mail:{},env:{...env,PKCH_SALES_ENABLED:'false',CONTROL_EMAIL:'one@example.com'}});const c=await service.createControl(input());assert.equal(c.fields.OutSum,'10.00');assert.equal(rows.get(c.order).offer_version,'operator-technical-check');await assert.rejects(service.createControl(input('other@example.com')),/invalid_checkout/);});
 test('background retry resumes a saved failed notice without reissuing the customer link',async()=>{const r=rig();const c=await r.service.create(input()),row=r.rows.get(c.order);r.failOwner(true);await assert.rejects(r.service.payment(payment(row)),/smtp/);r.failOwner(false);assert.deepEqual(await r.service.retry(),{checked:1,failed:0});assert.ok(row.delivery_retry_at);assert.ok(row.owner_order_notified_at);assert.equal(r.sent.filter(x=>x.type==='client').length,1);assert.equal(r.sent.filter(x=>x.type==='owner').length,1);assert.deepEqual(await r.service.retry(),{checked:0,failed:0});});
+
+
+test('SPKCH has its own fixed price, signed receipt, paid form and immutable buyer',async()=>{
+  const r=rig();
+  const c=await r.service.create({...input('strategy@example.com','strategy-request-123456789'),product:'spkch',amount_minor:1000});
+  const row=r.rows.get(c.order),f=c.fields;
+  assert.equal(f.OutSum,'49900.00');assert.equal(f.Shp_product,'spkch');
+  assert.match(JSON.parse(decodeURIComponent(f.Receipt)).items[0].name,/Стратегическая/);
+  assert.equal(JSON.parse(decodeURIComponent(f.Receipt)).items[0].sum,49900);
+  const expected=crypto.createHash('sha256').update([f.MerchantLogin,f.OutSum,f.InvId,f.Receipt,f.SuccessUrl2,'GET',f.FailUrl2,'GET',env.ROBOKASSA_PASSWORD1,'Shp_order='+row.id,'Shp_product=spkch'].join(':')).digest('hex');
+  assert.equal(f.SignatureValue,expected);
+  await assert.rejects(r.service.payment(payment(row,{Shp_product:'pkch'})),/invalid_payment/);
+  await assert.rejects(r.service.payment(payment(row,{OutSum:'14900.000000'})),/invalid_payment/);
+  await assert.rejects(r.service.submission({formType:'СПКЧ',orderNumber:row.id,email:row.email,accessToken:flow.capability(row,'questionnaire',env)}),/invalid_token/);
+  await r.service.payment(payment(row,{EMail:'wrong@example.com'}));
+  assert.equal(r.sent[0].to,'strategy@example.com');
+  assert.equal(new URL(r.sent[0].url).pathname,'/anketa-spkch');
+  const token=new URL(r.sent[0].url).searchParams.get('token');
+  assert.deepEqual(await r.service.submission({formType:'СПКЧ',orderNumber:row.id,email:row.email,accessToken:token}),{order:row.id});
+  await assert.rejects(r.service.submission({formType:'ПКЧ',orderNumber:row.id,email:row.email,accessToken:token}),/invalid_form/);
+  await assert.rejects(r.service.submission({formType:'СПКЧ',orderNumber:row.id,email:'wrong@example.com',accessToken:token}),/email_mismatch/);
+  await assert.rejects(r.service.create({...input('strategy@example.com','strategy-request-123456789'),product:'pkch'}),/checkout_conflict/);
+});
+test('product gates are independent and unknown products cannot be charged',()=>{
+  const sp={...input(),product:'spkch'};
+  assert.throws(()=>flow.draft(sp,{...env,SPKCH_SALES_ENABLED:'false'}),/sales_disabled/);
+  assert.equal(flow.draft(input(),{...env,SPKCH_SALES_ENABLED:'false'}).amount_minor,1490000);
+  assert.equal(flow.draft(sp,{...env,PKCH_SALES_ENABLED:'false'}).amount_minor,4990000);
+  for(const product of ['private','club','constructor','__proto__'])assert.throws(()=>flow.draft({...sp,product},env),/invalid_checkout/);
+});
+test('SPKCH requires its reference and 90-day task instead of birth fields',()=>{
+  const form={formType:'СПКЧ',pkchCode:'PKCH-existing',ninetyDayTask:'Конкретная задача'};
+  assert.doesNotThrow(()=>flow.validateSubmissionFields(form));
+  assert.throws(()=>flow.validateSubmissionFields({...form,pkchCode:''}),/required_fields/);
+  assert.throws(()=>flow.validateSubmissionFields({...form,ninetyDayTask:''}),/required_fields/);
+  assert.throws(()=>flow.validateSubmissionFields({formType:'ПКЧ',pkchCode:'fake',ninetyDayTask:'fake'}),/required_fields/);
+});
+test('SPKCH IAM control is 10 RUB and leaves public gate closed',async()=>{
+  const rows=new Map();const config={...env,SPKCH_SALES_ENABLED:'false',CONTROL_EMAIL:'one@example.com'};
+  const service=flow.service({store:{create:async r=>{rows.set(r.id,r);return r;}},mail:{},env:config});
+  const c=await service.createControl({...input(),product:'spkch'});
+  assert.equal(c.fields.OutSum,'10.00');assert.equal(c.fields.Shp_product,'spkch');
+  assert.equal(rows.get(c.order).offer_version,'operator-technical-check');
+  assert.equal(config.SPKCH_SALES_ENABLED,'false');
+});
