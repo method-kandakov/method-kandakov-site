@@ -1,4 +1,4 @@
-# Automatic PKCH checkout — deployment record
+# Automatic PKCH and SPKCH checkout — deployment record
 
 This change replaces the single-recipient binding for new PKCH orders. The existing paid control order and its submitted questionnaire continue to use the legacy path.
 
@@ -14,20 +14,20 @@ This change replaces the single-recipient binding for new PKCH orders. The exist
 - Questionnaire tokens bind the order, email, product, deadline and purpose. Existing canonical saved-answer notifications remain unchanged.
 - IAM-only recovery handles one pending order or saved questionnaire per invocation, postponing a failed row for five minutes so one recipient does not block all others. SMTP remains at-least-once: simultaneous deliveries can duplicate a notification, but never create another questionnaire or change its recipient.
 
-## Mandatory activation steps
+## Verified production state — 15 November 2026
 
-1. Obtain CURRENT existing merchant Passwords 1 and 2 through the authenticated support thread. On 12 November support confirmed Password 2 changed before the previous payment and is no longer the value they previously supplied. Do not rotate credentials or reuse the obsolete value.
-2. Store current values in Lockbox; keep them out of Git, terminal arguments, screenshots and handoff documents. Add ROBOKASSA_PASSWORD1 to the function's existing secret bindings. Retain SHA256 matching merchant settings.
-3. Apply orders-schema.sql in the existing ru-central1 YDB. Check the real query types, including required retention_until. Do not insert invented questionnaire answers.
-4. Deploy handler.js, fulfillment.js, orders.js, order-store.js and existing package files as one function version. Keep PKCH_SALES_ENABLED=false and frontend checkout.enabled=false until the automatic real test passes.
-5. IAM raw create-checkout-control creates a separate 10 RUB technical checkout for CONTROL_EMAIL using existing keys, even while public sales are disabled. The row records operator-technical-check, not customer acceptance. It does not charge, confirm payment, or submit a questionnaire. The user completes payment personally.
-6. Verify the real provider payment callback (without manual paid override), receipt, customer email link, questionnaire storage and owner email. Verify a second address/order using staging/mocks first and a separate authorized real test if required. Wrong signatures and amounts must still be rejected.
-7. Configure an IAM timer each minute before general activation. The handler recognizes the documented yandex.cloud.events.serverless.triggers.TimerMessage event, only for raw IAM calls. Confirm the function invocation account. Do not publish a retry endpoint.
-8. Publish the status page and checkout changes. Only then set PKCH_SALES_ENABLED=true and checkout.enabled=true. Inspect a fresh browser's checkout, return status and mobile email field. Preserve other product flows.
+Current Passwords 1 and 2 are present in the existing Lockbox bindings. Do not request them again or rotate them. PKCH automatic payment, customer questionnaire email, stored submission and owner notification were verified using a real 10 RUB order. Public PKCH sales are enabled. The existing retry timer is already configured; do not create another.
 
-## External blocker as of 12 November 2026
+## SPKCH activation
 
-Current merchant passwords are awaited in the existing Robokassa support thread (11 comments, reopened). Code tests are not proof of a successful automatic real payment. This branch must not be described as an already enabled production checkout.
+- Backend price is fixed at RUB 49,900. SPKCH uses its own product code, receipt, questionnaire route and form validation. PKCH capability format is unchanged, preserving existing paid links.
+- Deploy the updated handler, fulfillment, orders and order-store with existing package files as one function version. Preserve all environment variables, Lockbox bindings, service account, memory, timeout and timer. `SPKCH_SALES_ENABLED` remains false/absent until its real control passes; `PKCH_SALES_ENABLED` stays true.
+- IAM-only raw `{"controlDiagnostic":"create-checkout-control","product":"spkch"}` prepares a distinct 10 RUB control bound to CONTROL_EMAIL. It does not charge, accept terms for a customer or confirm payment. The user pays personally. Omitted product retains the original PKCH control behavior.
+- Verify provider callback without manual paid override, customer SPKCH link, completed form saved with pkch_code and ninety_day_task, and owner notification. Existing birth fields are required only for PKCH.
+- The SPKCH form collects name, email, ready-PKCH code or previous order number, one task for 90 days and consent. The reference supports owner review; this change does not automatically prove a prior PKCH was delivered.
+- After that test, set backend `SPKCH_SALES_ENABLED=true` and frontend `checkout.spkchEnabled=true`. Keep public questionnaire gate false. Before activation the SPKCH button routes to contact, avoiding the old static unbound invoice.
+- Real final strategy preparation and delivery remain a separate author-reviewed operation. Do not claim automated strategy generation or that all products are ready.
+- PRIVATE still requires task agreement before payment; CLUB remains unchanged.
 
 ## Validation
 
