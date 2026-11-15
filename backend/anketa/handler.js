@@ -237,10 +237,10 @@ module.exports.handler = async function handler(event) {
     const driver=await getDriver();
     await driver.tableClient.withSessionRetry(session=>session.executeQuery('SELECT id,request_key,email,product,amount_minor,status,created_ms,deadline_ms,offer_version,privacy_version,paid_at,link_sent_at,owner_order_notified_at,delivery_retry_at,retention_until FROM orders LIMIT 0; SELECT id,owner_notified_at,notification_retry_at FROM submissions LIMIT 0;'));
     await fulfillment.verifyMailer();
-    return response(200,{ok:true,databaseReady:true,smtpReady:true,password1Present:Boolean(process.env.ROBOKASSA_PASSWORD1),password2Present:Boolean(process.env.ROBOKASSA_PASSWORD2),salesEnabled:process.env.PKCH_SALES_ENABLED==='true'});
+    return response(200,{ok:true,databaseReady:true,smtpReady:true,password1Present:Boolean(process.env.ROBOKASSA_PASSWORD1),password2Present:Boolean(process.env.ROBOKASSA_PASSWORD2),salesEnabled:process.env.PKCH_SALES_ENABLED==='true',spkchSalesEnabled:process.env.SPKCH_SALES_ENABLED==='true'});
   }
   if(event?.controlDiagnostic==='create-checkout-control'&&!event.httpMethod&&!event.requestContext) {
-    return response(200,{ok:true,...await orderFlow.createControl({product:'pkch',email:process.env.CONTROL_EMAIL,requestKey:crypto.randomUUID(),acceptOffer:true,acceptPrivacy:true})});
+    return response(200,{ok:true,...await orderFlow.createControl({product:event.product||'pkch',email:process.env.CONTROL_EMAIL,requestKey:crypto.randomUUID(),acceptOffer:true,acceptPrivacy:true})});
   }
   const timer=event?.messages?.[0]?.event_metadata?.event_type==='yandex.cloud.events.serverless.triggers.TimerMessage';
   if((event?.controlDiagnostic==='retry-pending-delivery'||timer)&&!event.httpMethod&&!event.requestContext) {
@@ -308,7 +308,7 @@ module.exports.handler = async function handler(event) {
       const control=fulfillment.authorizeSubmission(data);
       if(!(await controlPaid(control.order)))throw Error('invalid_token');
     } else await orderFlow.submission(data);
-    if (!data.birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(data.birthDate) || !data.birthTime || !data.birthTimeAccuracy || !data.birthPlace || !data.mainQuestion) throw new Error('required_fields');
+    require('./orders').validateSubmissionFields(data);
     const id = await saveSubmission(data);
     let ownerNotified=true;
     try {await notifySavedSubmission(id);} catch(error) {ownerNotified=false;console.error('submission_notification_failed',{code:'notification_unavailable'});}
