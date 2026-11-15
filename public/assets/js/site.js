@@ -105,20 +105,21 @@
   const checkoutEmail=qs('#checkout-email',layer);
   const emailWrap=qs('#checkout-email-wrap',layer);
   let requestKey=null;
-  const automaticPKCH=()=>current==='pkch'&&CFG.checkout?.enabled===true;
+  const automaticCheckout=()=>CFG.checkout?.enabled===true&&(current==='pkch'||(current==='spkch'&&CFG.checkout?.spkchEnabled===true));
 
   const paymentMap = () => ({
     // Public Robokassa checkout URL is also kept here as a safe fallback so
     // an older cached config can never send a PKCH buyer to contacts.
     pkch: CFG.payments?.pkch || CFG.prodamus?.pkch || "https://auth.robokassa.ru/merchant/Invoice/l0zaYrL8IUC4kF9MHhYCMQ",
-    spkch: CFG.payments?.spkch || CFG.prodamus?.spkch || "https://auth.robokassa.ru/merchant/Invoice/LVFVF5p-MEGTyir69duK4A",
+    spkch: CFG.checkout?.spkchEnabled===true ? (CFG.payments?.spkch || '') : '',
     clubMonthly: CFG.payments?.clubMonthly || CFG.prodamus?.clubMonthly || "",
     clubAnnual: CFG.payments?.clubAnnual || CFG.prodamus?.clubAnnual || ""
   });
 
   function updateGo(){
-    const ok = offer.checked && pd.checked && (!automaticPKCH()||(checkoutEmail.value.trim()&&checkoutEmail.checkValidity()));
+    const ok = offer.checked && pd.checked && (!automaticCheckout()||(checkoutEmail.value.trim()&&checkoutEmail.checkValidity()));
     go.setAttribute("aria-disabled", ok ? "false" : "true");
+    go.disabled=!ok;
   }
   offer.addEventListener("change", updateGo);
   pd.addEventListener("change", updateGo);
@@ -137,7 +138,7 @@
       e.preventDefault();
       current = btn.dataset.checkout;
       requestKey=null;
-      emailWrap.hidden=!automaticPKCH();
+      emailWrap.hidden=!automaticCheckout();
       title.textContent = btn.dataset.title || "Оформление";
       price.textContent = btn.dataset.price || "";
       offer.checked = false;
@@ -151,7 +152,7 @@
         : hasPaymentLink
           ? "После оплаты Александр Кандаков свяжется с вами, чтобы получить необходимые данные."
           : "После подтверждения условий вы увидите контакты для оформления заказа.";
-      if(automaticPKCH())recurring.textContent='После подтверждения оплаты на указанную почту придёт персональная ссылка на анкету ПКЧ.';
+      if(automaticCheckout())recurring.textContent='После подтверждения оплаты на указанную почту придёт персональная ссылка на анкету '+(current==='spkch'?'СПКЧ. Для подготовки стратегии нужна ваша готовая ПКЧ.':'ПКЧ.');
       go.textContent = hasPaymentLink ? "Перейти к оплате" : "Показать контакты";
       layer.classList.add("open");
       document.body.classList.add("modal-open");
@@ -160,11 +161,11 @@
 
   go.addEventListener("click", async () => {
     if (go.getAttribute("aria-disabled") === "true") return;
-    if(automaticPKCH()) {
+    if(automaticCheckout()) {
       go.disabled=true;go.textContent='Создаём заказ…';
       requestKey ||= crypto.randomUUID();
       try {
-        const response=await fetch(CFG.checkout.endpoint+'?action=checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({product:'pkch',email:checkoutEmail.value.trim(),requestKey,acceptOffer:offer.checked,acceptPrivacy:pd.checked})});
+        const response=await fetch(CFG.checkout.endpoint+'?action=checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({product:current,email:checkoutEmail.value.trim(),requestKey,acceptOffer:offer.checked,acceptPrivacy:pd.checked})});
         const result=await response.json();
         if(!response.ok||!result.ok)throw Error(result.error||'checkout_unavailable');
         if(result.alreadyPaid){window.location.href='checkout-status.html?order='+encodeURIComponent(result.order)+'&key='+encodeURIComponent(result.statusToken);return;}
