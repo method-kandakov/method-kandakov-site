@@ -26,6 +26,7 @@ window.KANDAKOV_CONFIG = {
   // Activate only after current integration keys and an automatic real payment are verified.
   checkout: {
     enabled: true,
+    spkchEnabled: false,
     endpoint: "https://d5dsri43hgg76pqk7l61.nnekmrav.apigw.yandexcloud.net/submit"
   },
 
