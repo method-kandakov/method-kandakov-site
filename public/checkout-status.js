@@ -12,7 +12,7 @@
       const response=await fetch(window.KANDAKOV_CONFIG.checkout.endpoint+'?action=status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({order,statusToken:key})});
       const result=await response.json();if(!response.ok||!result.ok)throw Error('unavailable');
       if(result.paid){title.textContent='Оплата подтверждена';message.textContent=result.emailSent?'Персональная ссылка на анкету отправлена на указанную при заказе почту. Можно открыть её и здесь.':'Можно заполнить анкету сейчас. Письмо с персональной ссылкой ещё отправляется.';
-        const url=new URL(result.questionnaireURL);if(url.origin!=='https://methodkandakov.com'||url.pathname!=='/anketa-pkch')throw Error('invalid_link');link.href=url.href;link.hidden=false;button.hidden=true;return;}
+        const url=new URL(result.questionnaireURL);if(url.origin!=='https://methodkandakov.com'||!['/anketa-pkch','/anketa-spkch'].includes(url.pathname))throw Error('invalid_link');link.href=url.href;link.hidden=false;button.hidden=true;return;}
       title.textContent='Ожидаем подтверждение оплаты';message.textContent='Если вы уже оплатили, не платите повторно. Дождитесь подтверждения или проверьте почту.';
     }catch{title.textContent='Не удалось проверить заказ';message.textContent='Попробуйте проверить ещё раз. Не оплачивайте заказ повторно, если деньги уже списались.';}
     finally{button.disabled=false;}
