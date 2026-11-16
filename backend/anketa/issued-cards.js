@@ -1,5 +1,4 @@
 'use strict';
-const crypto=require('node:crypto');
 function referenceKey(value) {
   const code=String(value||'').trim().toUpperCase();
   if(/^\d{1,19}$/.test(code))return 'ORDER:'+code;
@@ -26,7 +25,9 @@ function issuedCards({store,now=Date.now}) {
       if(existing.order_id!==row.id||existing.email!==row.email||(input.code&&referenceKey(input.code)!==existing.code))throw Error('registry_conflict');
       return {code:existing.code,order:row.id};
     }
-    const code=input.code?referenceKey(input.code):'PKCH-'+crypto.randomBytes(16).toString('hex').toUpperCase();
+    // Codes come from the approved Ladini + owner-number protocol, never random.
+    if(!input.code)throw Error('approved_pkch_code_required');
+    const code=referenceKey(input.code);
     if(!code.startsWith('PKCH-'))throw Error('invalid_pkch_reference');
     const occupied=await store.findIssuedCard(code);
     if(occupied)throw Error('registry_conflict');

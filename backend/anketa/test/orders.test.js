@@ -80,11 +80,12 @@ test('issued registry rejects foreign, unknown, undelivered, expired and unpaid 
   card.deadline_ms=1;await assert.rejects(r.service.checkReference(check),/invalid_pkch_reference/);card.deadline_ms=Date.now()+100000;
   r.rows.get(a.order).status='pending';await assert.rejects(r.service.checkReference(check),/invalid_pkch_reference/);
 });
-test('issuing a PKCH is explicit, immutable and idempotent; generated codes contain no birth data',async()=>{
+test('issuing requires an approved code, is immutable and idempotent',async()=>{
   const r=rig();const a=await r.service.create(input('owner@example.com','issued-explicit-owner-1234'));
   await assert.rejects(r.service.registerIssued({order:a.order,deliveryProof:'owner-confirmed-delivery'}),/invalid_pkch_reference/);
   r.rows.get(a.order).status='paid';await assert.rejects(r.service.registerIssued({order:a.order}),/invalid_delivery_proof/);
-  const first=await r.service.registerIssued({order:a.order,deliveryProof:'owner-confirmed-delivery'});assert.match(first.code,/^PKCH-[A-F0-9]{32}$/);
+  await assert.rejects(r.service.registerIssued({order:a.order,deliveryProof:'owner-confirmed-delivery'}),/approved_pkch_code_required/);
+  const first=await r.service.registerIssued({order:a.order,code:'PKCH-03-11-08-01',deliveryProof:'owner-confirmed-delivery'});assert.equal(first.code,'PKCH-03-11-08-01');
   assert.deepEqual(await r.service.registerIssued({order:a.order,deliveryProof:'owner-confirmed-delivery'}),first);
   await assert.rejects(r.service.registerIssued({order:a.order,code:'PKCH-REASSIGNED-0001',deliveryProof:'owner-confirmed-delivery'}),/registry_conflict/);
   const b=await r.service.create(input('other@example.com','issued-second-owner-12345'));r.rows.get(b.order).status='paid';
