@@ -50,6 +50,33 @@ async function telegram(method, body = {}) {
   return result.result;
 }
 
+
+function validatePayload(payload) {
+  if (!['main', 'club'].includes(payload.channel)) throw new Error('Unknown channel.');
+  if (typeof payload.message !== 'string' || !payload.message.trim()) throw new Error('Message is empty.');
+  const limit = payload.imageBase64 ? 1024 : 4096;
+  if ([...payload.message].length > limit) throw new Error('Message exceeds Telegram limit.');
+  if (payload.imageBase64 && payload.imageType !== 'image/jpeg') throw new Error('Unsupported photo type.');
+}
+
+async function sendPayload(payload, chatId) {
+  validatePayload(payload);
+  if (!payload.imageBase64) {
+    return telegram('sendMessage', { chat_id: chatId, text: payload.message, parse_mode: 'HTML', disable_web_page_preview: false });
+  }
+  const bytes = Buffer.from(payload.imageBase64, 'base64');
+  if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new Error('Invalid photo size.');
+  const form = new FormData();
+  form.set('chat_id', String(chatId));
+  form.set('caption', payload.message);
+  form.set('parse_mode', 'HTML');
+  form.set('photo', new Blob([bytes], { type: 'image/jpeg' }), 'card.jpg');
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) throw new Error(`Telegram rejected sendPhoto: ${result.description || response.status}`);
+  return result.result;
+}
+
 if (mode === 'setup') {
   const updates = await telegram('getUpdates', {
     allowed_updates: ['my_chat_member', 'channel_post'],
@@ -71,19 +98,19 @@ if (mode === 'setup') {
   const chatId = payload.channel === 'main'
     ? '@methodkandakov'
     : decryptSmall(fs.readFileSync(clubChatPath, 'utf8'));
-  const sent = await telegram('sendMessage', {
-    chat_id: chatId,
-    text: payload.message,
-    parse_mode: 'HTML',
-    disable_web_page_preview: false,
-  });
+  const sent = await sendPayload(payload, chatId);
   console.log(`Telegram accepted the publication (message ${sent.message_id}).`);
 } else if (mode === 'scheduled') {
   const channel = process.env.TELEGRAM_CHANNEL;
   if (!['main', 'club'].includes(channel)) throw new Error('Unknown scheduled channel.');
   const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
   if (!Array.isArray(queue)) throw new Error('Telegram queue must be an array.');
-  const index = queue.findIndex((item) => item && item.channel === channel && typeof item.payload === 'string');
+  const now = Date.now();
+  for (const item of queue) {
+    if (item?.scheduledFor && !Number.isFinite(Date.parse(item.scheduledFor))) throw new Error('Invalid scheduledFor.');
+  }
+  const index = queue.findIndex((item) => item && item.channel === channel && typeof item.payload === 'string'
+    && (!item.scheduledFor || Date.parse(item.scheduledFor) <= now));
   if (index === -1) {
     console.log(`No queued ${channel} publication. Nothing was sent.`);
     process.exit(0);
@@ -95,12 +122,7 @@ if (mode === 'setup') {
   const chatId = channel === 'main'
     ? '@methodkandakov'
     : decryptSmall(fs.readFileSync(clubChatPath, 'utf8'));
-  const sent = await telegram('sendMessage', {
-    chat_id: chatId,
-    text: payload.message,
-    parse_mode: 'HTML',
-    disable_web_page_preview: false,
-  });
+  const sent = await sendPayload(payload, chatId);
   queue.splice(index, 1);
   fs.writeFileSync(queuePath, `${JSON.stringify(queue, null, 2)}\n`);
   console.log(`Telegram accepted scheduled publication (message ${sent.message_id}).`);
