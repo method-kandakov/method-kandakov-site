@@ -233,9 +233,12 @@ async function paymentResult(event) {
   }
 }
 module.exports.handler = async function handler(event) {
+  if(event?.controlDiagnostic==='register-issued-pkch'&&!event.httpMethod&&!event.requestContext) {
+    return response(200,{ok:true,...await orderFlow.registerIssued(event)});
+  }
   if(event?.controlDiagnostic==='production-preflight'&&!event.httpMethod&&!event.requestContext) {
     const driver=await getDriver();
-    await driver.tableClient.withSessionRetry(session=>session.executeQuery('SELECT id,request_key,email,product,amount_minor,status,created_ms,deadline_ms,offer_version,privacy_version,paid_at,link_sent_at,owner_order_notified_at,delivery_retry_at,retention_until FROM orders LIMIT 0; SELECT id,owner_notified_at,notification_retry_at FROM submissions LIMIT 0;'));
+    await driver.tableClient.withSessionRetry(session=>session.executeQuery('SELECT id,request_key,email,product,amount_minor,status,created_ms,deadline_ms,offer_version,privacy_version,paid_at,link_sent_at,owner_order_notified_at,delivery_retry_at,retention_until FROM orders LIMIT 0; SELECT id,owner_notified_at,notification_retry_at FROM submissions LIMIT 0; SELECT reference,code,order_id,email,deadline_ms,delivery_confirmed_at,retention_until FROM issued_pkch LIMIT 0;'));
     await fulfillment.verifyMailer();
     return response(200,{ok:true,databaseReady:true,smtpReady:true,password1Present:Boolean(process.env.ROBOKASSA_PASSWORD1),password2Present:Boolean(process.env.ROBOKASSA_PASSWORD2),salesEnabled:process.env.PKCH_SALES_ENABLED==='true',spkchSalesEnabled:process.env.SPKCH_SALES_ENABLED==='true'});
   }
@@ -295,26 +298,27 @@ module.exports.handler = async function handler(event) {
   if (method === 'OPTIONS') return response(204, null);
   if (method !== 'POST') return response(405, { ok: false, error: 'method_not_allowed' });
   if (origin !== ALLOWED_ORIGIN) return response(403, { ok: false, error: 'origin_not_allowed' });
-  if(['checkout','status'].includes(event?.queryStringParameters?.action)) {
+  if(['checkout','status','pkch-reference'].includes(event?.queryStringParameters?.action)) {
     try {
       const input=parseBody(event);
-      const result=event.queryStringParameters.action==='checkout'?await orderFlow.create(input):await orderFlow.status(input);
+      const action=event.queryStringParameters.action;
+      const result=action==='checkout'?await orderFlow.create(input):action==='status'?await orderFlow.status(input):{valid:Boolean(await orderFlow.checkReference(input))};
       return response(200,{ok:true,...result});
-    }catch(error){const codes=new Set(['sales_disabled','sales_not_configured','invalid_email','invalid_checkout','checkout_conflict','invalid_token']);const code=codes.has(error.message)?error.message:'checkout_unavailable';return response(['invalid_email','invalid_checkout','invalid_token'].includes(code)?400:code==='checkout_conflict'?409:503,{ok:false,error:code});}
+    }catch(error){const codes=new Set(['sales_disabled','sales_not_configured','invalid_email','invalid_checkout','checkout_conflict','invalid_token','invalid_pkch_reference','email_mismatch','invalid_form']);const code=codes.has(error.message)?error.message:'checkout_unavailable';return response(['invalid_email','invalid_checkout','invalid_token','invalid_pkch_reference','email_mismatch','invalid_form'].includes(code)?400:code==='checkout_conflict'?409:503,{ok:false,error:code});}
   }
   try {
     const data = validate(parseBody(event));
     if(data.orderNumber===process.env.CONTROL_ORDER_ID) {
       const control=fulfillment.authorizeSubmission(data);
       if(!(await controlPaid(control.order)))throw Error('invalid_token');
-    } else await orderFlow.submission(data);
+    } else {const verified=await orderFlow.submission(data);if(verified.pkchCode)data.pkchCode=verified.pkchCode;}
     require('./orders').validateSubmissionFields(data);
     const id = await saveSubmission(data);
     let ownerNotified=true;
     try {await notifySavedSubmission(id);} catch(error) {ownerNotified=false;console.error('submission_notification_failed',{code:'notification_unavailable'});}
     return response(201, { ok: true, id, ownerNotified });
   } catch (error) {
-    const safeErrors = new Set(['body_too_large', 'invalid_field', 'invalid_form', 'required_fields', 'invalid_token', 'email_mismatch']);
+    const safeErrors = new Set(['body_too_large', 'invalid_field', 'invalid_form', 'required_fields', 'invalid_token', 'email_mismatch', 'invalid_pkch_reference']);
     const code = safeErrors.has(error.message) ? error.message : 'internal_error';
     console.error('submission_failed', { code });
     return response(code === 'internal_error' ? 503 : 400, { ok: false, error: code });

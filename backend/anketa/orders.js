@@ -75,6 +75,13 @@ function questionnaireURL(row,env) {const url=new URL(product(row.product).quest
 
 // Storage and SMTP are injected so orchestration can be tested without real payments or personal records.
 function service({store,mail,env=process.env,now=Date.now}) {
+  const cards=require('./issued-cards').issuedCards({store,now});
+  async function checkedReference(data) {
+    const row=authorize(await store.get(String(data.orderNumber||'')),data.accessToken,'questionnaire',env,now());
+    if(row.product!=='spkch')throw Error('invalid_form');
+    if(emailAddress(data.email)!==row.email)throw Error('email_mismatch');
+    return cards.resolve(data.pkchCode,row.email);
+  }
   async function create(input,control=false) {
     const selected=product(input.product);
     const proposed=draft(input,control?{...env,[selected.flag]:'true'}:env,now());
@@ -96,10 +103,12 @@ function service({store,mail,env=process.env,now=Date.now}) {
   }
   return {
     create:input=>create(input),
+    registerIssued:input=>cards.register(input),
+    checkReference:checkedReference,
     createControl:input=>create(input,true),
     async payment(params) {const row=await store.get(params.get('InvId'));verifyCallback(params,row,env);await store.paid(row.id);await deliver({...row,status:'paid'});return row.id;},
     async status(input) {const row=authorize(await store.get(String(input.order||'')),input.statusToken,'status',env,now());return {order:row.id,paid:row.status==='paid',emailSent:Boolean(row.link_sent_at),...(row.status==='paid'?{questionnaireURL:questionnaireURL(row,env)}:{})};},
-    async submission(data) {const row=authorize(await store.get(data.orderNumber),data.accessToken,'questionnaire',env,now());if(data.formType!==product(row.product).label)throw Error('invalid_form');if(data.email!==row.email)throw Error('email_mismatch');return {order:row.id};},
+    async submission(data) {const row=authorize(await store.get(data.orderNumber),data.accessToken,'questionnaire',env,now());if(data.formType!==product(row.product).label)throw Error('invalid_form');if(data.email!==row.email)throw Error('email_mismatch');return {order:row.id,...(row.product==='spkch'?await checkedReference(data):{})};},
     async retry() {let failed=0;const rows=(await store.pendingMail()).slice(0,1);for(const row of rows){await store.defer(row.id);try{await deliver(row);}catch{failed++;}}return {checked:rows.length,failed};}
   };
 }

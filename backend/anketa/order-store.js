@@ -5,6 +5,17 @@ module.exports=function orderStore(getDriver) {
   async function query(sql,params={}) {const driver=await getDriver();return driver.tableClient.withSessionRetry(session=>session.executeQuery(sql,params));}
   async function get(id) {if(!/^\d{1,19}$/.test(String(id||'')))return undefined;return native(await query('DECLARE $id AS Utf8; SELECT * FROM orders WHERE id=$id;',{'$id':V.utf8(id)}));}
   return {get,
+    async findIssuedCard(reference) {
+      return native(await query('DECLARE $reference AS Utf8; SELECT * FROM issued_pkch WHERE reference=$reference;',{'$reference':V.utf8(reference)}));
+    },
+    async registerIssuedCard(card) {
+      // INSERT, never UPSERT: a code or order alias cannot be reassigned.
+      await query(`DECLARE $code AS Utf8; DECLARE $alias AS Utf8; DECLARE $order AS Utf8; DECLARE $email AS Utf8; DECLARE $deadline AS Uint64;
+        INSERT INTO issued_pkch (reference,code,order_id,email,deadline_ms,delivery_confirmed_at,retention_until)
+        VALUES ($code,$code,$order,$email,$deadline,CurrentUtcTimestamp(),Unwrap(CAST($deadline * 1000 AS Timestamp))),
+               ($alias,$code,$order,$email,$deadline,CurrentUtcTimestamp(),Unwrap(CAST($deadline * 1000 AS Timestamp)));`,
+        {'$code':V.utf8(card.code),'$alias':V.utf8('ORDER:'+card.order_id),'$order':V.utf8(card.order_id),'$email':V.utf8(card.email),'$deadline':V.uint64(card.deadline_ms)});
+    },
     async create(row) {
       const existing=await get(row.id);if(existing)return existing;
       const strings=['id','request_key','email','product','status','offer_version','privacy_version'];

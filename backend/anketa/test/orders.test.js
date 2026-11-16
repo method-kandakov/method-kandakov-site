@@ -4,7 +4,7 @@ const flow=require('../orders');
 const env={TOKEN_PEPPER:'test-only-pepper-'.repeat(4),ROBOKASSA_PASSWORD1:'test-only-one',ROBOKASSA_PASSWORD2:'test-only-two',ROBOKASSA_HASH:'sha256',PKCH_SALES_ENABLED:'true',SPKCH_SALES_ENABLED:'true'};
 const input=(email='one@example.com',requestKey='checkout-request-one-12345')=>({product:'pkch',email,requestKey,acceptOffer:true,acceptPrivacy:true});
 function payment(row,extra={}){const p=new URLSearchParams({OutSum:(row.amount_minor/100).toFixed(6),InvId:row.id,Shp_order:row.id,Shp_product:row.product,...extra});const extras=[...p.keys()].filter(k=>/^shp_/i.test(k)).sort().map(k=>k+'='+p.get(k));p.set('SignatureValue',crypto.createHash('sha256').update([p.get('OutSum'),row.id,env.ROBOKASSA_PASSWORD2,...extras].join(':')).digest('hex'));return p;}
-function rig(){const rows=new Map(),sent=[];let failOwner=false;const store={get:async id=>rows.get(id),create:async row=>{if(!rows.has(row.id))rows.set(row.id,{...row});return rows.get(row.id);},paid:async id=>{rows.get(id).status='paid';},mark:async(id,col)=>{rows.get(id)[col]=new Date();},defer:async id=>{rows.get(id).delivery_retry_at=new Date(Date.now()+300000);},pendingMail:async()=>[...rows.values()].filter(r=>r.status==='paid'&&(!r.link_sent_at||!r.owner_order_notified_at))};const mail={sendOrderLink:async(row,url)=>sent.push({type:'client',to:row.email,url}),sendOrderNotice:async row=>{if(failOwner)throw Error('smtp');sent.push({type:'owner',order:row.id});}};return {rows,sent,service:flow.service({store,mail,env}),failOwner:value=>{failOwner=value;}};}
+function rig(){const rows=new Map(),sent=[],cards=new Map();let failOwner=false;const store={findIssuedCard:async key=>cards.get(key),registerIssuedCard:async card=>{const value={...card,delivery_confirmed_at:new Date()};cards.set(card.code,value);cards.set('ORDER:'+card.order_id,value);},get:async id=>rows.get(id),create:async row=>{if(!rows.has(row.id))rows.set(row.id,{...row});return rows.get(row.id);},paid:async id=>{rows.get(id).status='paid';},mark:async(id,col)=>{rows.get(id)[col]=new Date();},defer:async id=>{rows.get(id).delivery_retry_at=new Date(Date.now()+300000);},pendingMail:async()=>[...rows.values()].filter(r=>r.status==='paid'&&(!r.link_sent_at||!r.owner_order_notified_at))};const mail={sendOrderLink:async(row,url)=>sent.push({type:'client',to:row.email,url}),sendOrderNotice:async row=>{if(failOwner)throw Error('smtp');sent.push({type:'owner',order:row.id});}};return {rows,sent,cards,service:flow.service({store,mail,env}),failOwner:value=>{failOwner=value;}};}
 test('checkout binds two separate customers, fixed price and independent capabilities',async()=>{const r=rig();const a=await r.service.create(input());const b=await r.service.create(input('two@example.com','checkout-request-two-12345'));assert.notEqual(a.order,b.order);assert.equal(a.fields.OutSum,'14900.00');assert.equal(a.fields.Email,'one@example.com');assert.equal(b.fields.Email,'two@example.com');assert.equal(a.fields.Shippable,undefined);assert.equal(a.fields.IsTest,undefined);assert.ok(!JSON.stringify(a).includes(env.ROBOKASSA_PASSWORD1));await assert.rejects(r.service.status({order:a.order,statusToken:b.statusToken}),/invalid_token/);assert.deepEqual(await r.service.status({order:a.order,statusToken:a.statusToken}),{order:a.order,paid:false,emailSent:false});});
 test('request retries reuse the order and reject reassignment of its email',async()=>{const r=rig();const a=await r.service.create(input());const again=await r.service.create(input());assert.equal(a.order,again.order);assert.equal(r.rows.size,1);await assert.rejects(r.service.create(input('other@example.com')),/checkout_conflict/);});
 test('signature includes receipt, return URLs and sorted custom fields',()=>{const row=flow.draft(input(),env);const c=flow.checkout(row,env),f=c.fields;const expected=crypto.createHash('sha256').update([f.MerchantLogin,f.OutSum,f.InvId,f.Receipt,f.SuccessUrl2,'GET',f.FailUrl2,'GET',env.ROBOKASSA_PASSWORD1,'Shp_order='+row.id,'Shp_product=pkch'].join(':')).digest('hex');assert.equal(f.SignatureValue,expected);assert.equal(JSON.parse(decodeURIComponent(f.Receipt)).items[0].sum,14900);assert.ok(f.SuccessUrl2.startsWith('https://methodkandakov.com/checkout-status.html?'));});
@@ -18,6 +18,7 @@ test('background retry resumes a saved failed notice without reissuing the custo
 
 test('SPKCH has its own fixed price, signed receipt, paid form and immutable buyer',async()=>{
   const r=rig();
+  const source=await r.service.create(input('strategy@example.com','pkch-before-strategy-12345'));r.rows.get(source.order).status='paid';await r.service.registerIssued({order:source.order,code:'PKCH-TEST-0001',deliveryProof:'owner-confirmed-delivery'});
   const c=await r.service.create({...input('strategy@example.com','strategy-request-123456789'),product:'spkch',amount_minor:1000});
   const row=r.rows.get(c.order),f=c.fields;
   assert.equal(f.OutSum,'49900.00');assert.equal(f.Shp_product,'spkch');
@@ -27,14 +28,14 @@ test('SPKCH has its own fixed price, signed receipt, paid form and immutable buy
   assert.equal(f.SignatureValue,expected);
   await assert.rejects(r.service.payment(payment(row,{Shp_product:'pkch'})),/invalid_payment/);
   await assert.rejects(r.service.payment(payment(row,{OutSum:'14900.000000'})),/invalid_payment/);
-  await assert.rejects(r.service.submission({formType:'СПКЧ',orderNumber:row.id,email:row.email,accessToken:flow.capability(row,'questionnaire',env)}),/invalid_token/);
+  await assert.rejects(r.service.submission({formType:'СПКЧ',pkchCode:'PKCH-TEST-0001',orderNumber:row.id,email:row.email,accessToken:flow.capability(row,'questionnaire',env)}),/invalid_token/);
   await r.service.payment(payment(row,{EMail:'wrong@example.com'}));
   assert.equal(r.sent[0].to,'strategy@example.com');
   assert.equal(new URL(r.sent[0].url).pathname,'/anketa-spkch');
   const token=new URL(r.sent[0].url).searchParams.get('token');
-  assert.deepEqual(await r.service.submission({formType:'СПКЧ',orderNumber:row.id,email:row.email,accessToken:token}),{order:row.id});
+  assert.deepEqual(await r.service.submission({formType:'СПКЧ',pkchCode:'PKCH-TEST-0001',orderNumber:row.id,email:row.email,accessToken:token}),{order:row.id,pkchCode:'PKCH-TEST-0001',pkchOrderId:source.order});
   await assert.rejects(r.service.submission({formType:'ПКЧ',orderNumber:row.id,email:row.email,accessToken:token}),/invalid_form/);
-  await assert.rejects(r.service.submission({formType:'СПКЧ',orderNumber:row.id,email:'wrong@example.com',accessToken:token}),/email_mismatch/);
+  await assert.rejects(r.service.submission({formType:'СПКЧ',pkchCode:'PKCH-TEST-0001',orderNumber:row.id,email:'wrong@example.com',accessToken:token}),/email_mismatch/);
   await assert.rejects(r.service.create({...input('strategy@example.com','strategy-request-123456789'),product:'pkch'}),/checkout_conflict/);
 });
 test('product gates are independent and unknown products cannot be charged',()=>{
@@ -58,4 +59,42 @@ test('SPKCH IAM control is 10 RUB and leaves public gate closed',async()=>{
   assert.equal(c.fields.OutSum,'10.00');assert.equal(c.fields.Shp_product,'spkch');
   assert.equal(rows.get(c.order).offer_version,'operator-technical-check');
   assert.equal(config.SPKCH_SALES_ENABLED,'false');
+});
+
+
+test('issued registry rejects foreign, unknown, undelivered, expired and unpaid PKCH references',async()=>{
+  const r=rig();
+  const a=await r.service.create(input('owner@example.com','registry-owner-pkch-12345'));r.rows.get(a.order).status='paid';
+  const issued=await r.service.registerIssued({order:a.order,code:'PKCH-OWNER-0001',deliveryProof:'owner-confirmed-delivery'});
+  assert.equal(issued.code,'PKCH-OWNER-0001');
+  const checkout=await r.service.create({...input('owner@example.com','registry-spkch-owner-1234'),product:'spkch'});const row=r.rows.get(checkout.order);row.status='paid';
+  const check={orderNumber:row.id,accessToken:flow.capability(row,'questionnaire',env),email:row.email,pkchCode:'pkch-owner-0001'};
+  assert.deepEqual(await r.service.checkReference(check),{pkchCode:issued.code,pkchOrderId:a.order});
+  assert.deepEqual(await r.service.checkReference({...check,pkchCode:a.order}),{pkchCode:issued.code,pkchOrderId:a.order});
+  const foreign=await r.service.create(input('other@example.com','registry-foreign-pkch-123'));r.rows.get(foreign.order).status='paid';await r.service.registerIssued({order:foreign.order,code:'PKCH-FOREIGN-0001',deliveryProof:'owner-confirmed-delivery'});
+  for(const code of ['PKCH-UNKNOWN-0001','PKCH-FOREIGN-0001','not-a-code'])await assert.rejects(r.service.checkReference({...check,pkchCode:code}),/invalid_pkch_reference/);
+  await assert.rejects(r.service.checkReference({...check,email:'other@example.com'}),/email_mismatch/);
+  await assert.rejects(r.service.checkReference({...check,accessToken:checkout.statusToken}),/invalid_token/);
+  row.status='pending';await assert.rejects(r.service.checkReference(check),/invalid_token/);row.status='paid';
+  const card=r.cards.get(issued.code);card.delivery_confirmed_at=null;await assert.rejects(r.service.checkReference(check),/invalid_pkch_reference/);card.delivery_confirmed_at=new Date();
+  card.deadline_ms=1;await assert.rejects(r.service.checkReference(check),/invalid_pkch_reference/);card.deadline_ms=Date.now()+100000;
+  r.rows.get(a.order).status='pending';await assert.rejects(r.service.checkReference(check),/invalid_pkch_reference/);
+});
+test('issuing a PKCH is explicit, immutable and idempotent; generated codes contain no birth data',async()=>{
+  const r=rig();const a=await r.service.create(input('owner@example.com','issued-explicit-owner-1234'));
+  await assert.rejects(r.service.registerIssued({order:a.order,deliveryProof:'owner-confirmed-delivery'}),/invalid_pkch_reference/);
+  r.rows.get(a.order).status='paid';await assert.rejects(r.service.registerIssued({order:a.order}),/invalid_delivery_proof/);
+  const first=await r.service.registerIssued({order:a.order,deliveryProof:'owner-confirmed-delivery'});assert.match(first.code,/^PKCH-[A-F0-9]{32}$/);
+  assert.deepEqual(await r.service.registerIssued({order:a.order,deliveryProof:'owner-confirmed-delivery'}),first);
+  await assert.rejects(r.service.registerIssued({order:a.order,code:'PKCH-REASSIGNED-0001',deliveryProof:'owner-confirmed-delivery'}),/registry_conflict/);
+  const b=await r.service.create(input('other@example.com','issued-second-owner-12345'));r.rows.get(b.order).status='paid';
+  await assert.rejects(r.service.registerIssued({order:b.order,code:first.code,deliveryProof:'owner-confirmed-delivery'}),/registry_conflict/);
+});
+
+test('legacy compact eight-digit code resolves to the delivered canonical code',async()=>{
+ const r=rig();const a=await r.service.create(input());r.rows.get(a.order).status='paid';await r.service.registerIssued({order:a.order,code:'PKCH-03-11-08-01',deliveryProof:'owner-confirmed-delivery'});
+ const c=await r.service.create({...input('one@example.com','legacy-spkch-check-12345'),product:'spkch'});const row=r.rows.get(c.order);row.status='paid';
+ const check={orderNumber:row.id,accessToken:flow.capability(row,'questionnaire',env),email:row.email,pkchCode:'03110801'};
+ assert.deepEqual(await r.service.checkReference(check),{pkchCode:'PKCH-03-11-08-01',pkchOrderId:a.order});
+ await assert.rejects(r.service.checkReference({...check,pkchCode:'03110802'}),/invalid_pkch_reference/);
 });

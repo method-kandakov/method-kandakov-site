@@ -38,3 +38,10 @@ Official integration references:
 - https://docs.robokassa.ru/ru/notifications-and-redirects
 
 Fiscal receipt compatibility with this self-employed merchant must be confirmed during the real provider test; do not infer it solely from a mocked request.
+
+
+## Issued PKCH registry
+
+Apply `issued-cards-schema.sql` before deploying reference lookup. Keep the function private. After confirmed final-card delivery invoke IAM-only raw diagnostic `{controlDiagnostic:"register-issued-pkch",order:"<paid PKCH order>",deliveryProof:"owner-confirmed-delivery"}`. The returned random code must be included in the delivered card; pass an already delivered legacy `code` when backfilling confirmed delivery. Registration timestamp means operator confirmation time. Never register merely because the questionnaire link was sent. Retries reuse the same code; INSERT prevents reassignment.
+
+SPKCH reference checks require a paid questionnaire capability, buyer email, and an unexpired delivered paid PKCH with the same email. Canonical code, legacy eight-digit shorthand, and source order number are accepted. Public response contains only valid:true, never private card data. Submission rechecks and stores canonical pkch_code. Existing submissions are not rewritten. Different-email purchases require operator review. Registry TTL follows source-order retention. Final card generation and delivery are not automated by this registry.
