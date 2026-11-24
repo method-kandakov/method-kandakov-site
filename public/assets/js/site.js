@@ -104,6 +104,14 @@
   const checkoutEmail=qs('#checkout-email',layer);
   const emailWrap=qs('#checkout-email-wrap',layer);
   let requestKey=null;
+  let pendingCheckout=null;
+
+  function createRequestKey() {
+    const api=window.crypto;
+    if (typeof api?.randomUUID === 'function') return api.randomUUID();
+    const bytes=api.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
+  }
   const automaticCheckout=()=>CFG.checkout?.enabled===true&&(current==='pkch'||(current==='spkch'&&CFG.checkout?.spkchEnabled===true));
 
   const paymentMap = () => ({
@@ -116,7 +124,7 @@
   });
 
   function updateGo(){
-    const ok = offer.checked && pd.checked && (!automaticCheckout()||(checkoutEmail.value.trim()&&checkoutEmail.checkValidity()));
+    const ok = !pendingCheckout && offer.checked && pd.checked && (!automaticCheckout()||(checkoutEmail.value.trim()&&checkoutEmail.checkValidity()));
     go.setAttribute("aria-disabled", ok ? "false" : "true");
     go.disabled=!ok;
   }
@@ -126,6 +134,8 @@
 
   let current = null;
   function closeCheckout(){
+    pendingCheckout?.abort();
+    pendingCheckout=null;
     layer.classList.remove("open");
     document.body.classList.remove("modal-open");
     current = null;
@@ -161,18 +171,40 @@
   go.addEventListener("click", async () => {
     if (go.getAttribute("aria-disabled") === "true") return;
     if(automaticCheckout()) {
-      go.disabled=true;go.textContent='Создаём заказ…';
-      requestKey ||= crypto.randomUUID();
+      const controller=new AbortController();
+      pendingCheckout=controller;
+      updateGo();
+      go.textContent='Создаём заказ…';
+      msg.classList.remove('show');
+      const timeout=setTimeout(()=>controller.abort(),15000);
       try {
-        const response=await fetch(CFG.checkout.endpoint+'?action=checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({product:current,email:checkoutEmail.value.trim(),requestKey,acceptOffer:offer.checked,acceptPrivacy:pd.checked})});
+        requestKey ||= createRequestKey();
+        const response=await fetch(CFG.checkout.endpoint+'?action=checkout',{
+          method:'POST',headers:{'content-type':'application/json'},signal:controller.signal,
+          body:JSON.stringify({product:current,email:checkoutEmail.value.trim(),requestKey,acceptOffer:offer.checked,acceptPrivacy:pd.checked})
+        });
         const result=await response.json();
+        if(pendingCheckout!==controller)return;
         if(!response.ok||!result.ok)throw Error(result.error||'checkout_unavailable');
         if(result.alreadyPaid){window.location.href='checkout-status.html?order='+encodeURIComponent(result.order)+'&key='+encodeURIComponent(result.statusToken);return;}
         if(result.action!=='https://auth.robokassa.ru/Merchant/Index.aspx'||result.method!=='POST'||!result.fields)throw Error('checkout_unavailable');
         const form=document.createElement('form');form.method='POST';form.action=result.action;
         Object.entries(result.fields).forEach(([name,value])=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=String(value);form.appendChild(input);});
         document.body.appendChild(form);form.submit();
-      }catch(error){msg.textContent=error.message==='invalid_email'?'Проверьте адрес электронной почты.':'Не удалось подготовить оплату. Попробуйте ещё раз: повторный запрос использует тот же заказ.';msg.classList.add('show');go.disabled=false;go.textContent='Перейти к оплате';}
+      }catch(error){
+        if(pendingCheckout!==controller)return;
+        msg.textContent=controller.signal.aborted
+          ? 'Сервис оплаты не ответил вовремя. Попробуйте ещё раз: повторный запрос использует тот же заказ.'
+          : error.message==='invalid_email'
+            ? 'Проверьте адрес электронной почты.'
+            : 'Не удалось подготовить оплату. Попробуйте ещё раз: повторный запрос использует тот же заказ.';
+        msg.classList.add('show');
+        pendingCheckout=null;
+        go.textContent='Перейти к оплате';
+        updateGo();
+      }finally{
+        clearTimeout(timeout);
+      }
       return;
     }
     const link = paymentMap()[current] || "";
