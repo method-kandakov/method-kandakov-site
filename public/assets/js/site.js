@@ -24,18 +24,17 @@
   if (!localStorage.getItem(cookieChoiceKey)) {
     const notice = document.createElement("section");
     notice.className = "cookie-notice";
-    notice.setAttribute("aria-label", "Уведомление об использовании cookie");
+    notice.setAttribute("aria-label", "Уведомление о данных в браузере");
     notice.innerHTML = `
       <div>
-        <strong>Данные на устройстве</strong>
-        <p>Сайт запоминает закрытие этого уведомления. При заполнении анкеты ответы сохраняются на вашем устройстве, чтобы вы могли продолжить позже. Реклама и аналитическое отслеживание не используются.</p>
+        <p>Браузер сохраняет черновик анкеты и отметку о закрытии этого уведомления.</p>
       </div>
       <div class="cookie-actions">
         <a href="cookies.html">Подробнее</a>
-        <button type="button" class="btn btn-gold" data-cookie-accept>Понятно</button>
+        <button type="button" class="btn btn-gold" data-cookie-dismiss>Понятно</button>
       </div>`;
     document.body.appendChild(notice);
-    qs("[data-cookie-accept]", notice).addEventListener("click", () => {
+    qs("[data-cookie-dismiss]", notice).addEventListener("click", () => {
       localStorage.setItem(cookieChoiceKey, "acknowledged");
       notice.remove();
     });
