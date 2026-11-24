@@ -224,6 +224,13 @@
     qs('[data-checkout="pkch"]')?.click();
   }
 
+  const sourcePage = document.referrer && new URL(document.referrer);
+  if (sourcePage && sourcePage.origin === window.location.origin &&
+      /^\/spkch-demo(?:\.html)?\/?$/.test(sourcePage.pathname) &&
+      /^\/spkch(?:\.html)?\/?$/.test(window.location.pathname)) {
+    qs('[data-checkout="spkch"]')?.click();
+  }
+
   // Legacy optional Prodamus widget loader. Retained for compatibility only.
   if (CFG.prodamusWidgetBaseUrl) {
     const base = String(CFG.prodamusWidgetBaseUrl).replace(/\/+$/,"");
