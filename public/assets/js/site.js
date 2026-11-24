@@ -219,7 +219,8 @@
     msg.classList.add("show");
   });
 
-  if (new URLSearchParams(window.location.search).get('checkout') === 'pkch') {
+  if (new URLSearchParams(window.location.search).get('checkout') === 'pkch' ||
+      window.location.hash === '#pkch-order') {
     qs('[data-checkout="pkch"]')?.click();
   }
 
