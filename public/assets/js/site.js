@@ -68,6 +68,7 @@
   // direct contact without collecting personal data on this site.
   const layer = document.createElement("div");
   layer.className = "checkout-layer";
+  layer.style.zIndex = "1001";
   layer.innerHTML = `
     <div class="checkout-backdrop" data-checkout-close></div>
     <div class="checkout-card" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
@@ -217,6 +218,10 @@
     msg.innerHTML = `Для оформления напишите Александру Кандакову через <a href="${telegram}" style="color:#f0d078;text-decoration:underline">Telegram</a> или <a href="${email}" style="color:#f0d078;text-decoration:underline">email</a>.`;
     msg.classList.add("show");
   });
+
+  if (new URLSearchParams(window.location.search).get('checkout') === 'pkch') {
+    qs('[data-checkout="pkch"]')?.click();
+  }
 
   // Legacy optional Prodamus widget loader. Retained for compatibility only.
   if (CFG.prodamusWidgetBaseUrl) {
