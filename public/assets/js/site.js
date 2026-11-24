@@ -94,6 +94,18 @@
       <div class="checkout-message" id="checkout-message"></div>
     </div>`;
   document.body.appendChild(layer);
+  const checkoutCard = qs('.checkout-card', layer);
+  checkoutCard.style.overflowY = 'auto';
+  checkoutCard.style.overscrollBehavior = 'contain';
+  checkoutCard.style.webkitOverflowScrolling = 'touch';
+
+  function sizeCheckout() {
+    const height = window.visualViewport?.height ?? window.innerHeight;
+    checkoutCard.style.maxHeight = Math.max(0, height - 36) + 'px';
+  }
+  window.addEventListener('resize', sizeCheckout);
+  window.visualViewport?.addEventListener('resize', sizeCheckout);
+
 
   const title = qs("#checkout-title", layer);
   const price = qs("#checkout-price", layer);
@@ -165,6 +177,8 @@
       if(automaticCheckout())recurring.textContent='После подтверждения оплаты на указанную почту придёт персональная ссылка на анкету '+(current==='spkch'?'СПКЧ. Для подготовки стратегии нужна ваша готовая ПКЧ.':'ПКЧ.');
       go.textContent = hasPaymentLink ? "Перейти к оплате" : "Показать контакты";
       layer.classList.add("open");
+      sizeCheckout();
+      checkoutCard.scrollTop = 0;
       document.body.classList.add("modal-open");
     });
   });
