@@ -362,6 +362,42 @@ li{margin:.28em 0}
   .cta-note{margin:5px auto!important;padding:6px 9px!important}
   .authenticity-stamp{margin:5px auto;padding:4px 8px}
 }
+#p19 .paper{
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-bottom:64px;
+}
+.example-actions{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:8px;
+  margin:12px auto 0;
+}
+.example-actions a{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  padding:8px 12px;
+  border:1px solid #936823;
+  border-radius:999px;
+  color:#513607;
+  text-align:center;
+  text-decoration:none;
+  font:700 13px/1.25 Arial,sans-serif;
+}
+.example-actions a:first-child{
+  background:#eac875;
+  color:#201503;
+}
+.example-actions a:focus-visible{outline:2px solid #805817;outline-offset:2px}
+@media(max-width:520px){
+  .example-actions{flex-direction:column;width:calc(100% - 16px)}
+}
+@media(max-height:620px){
+  #p19 .section-icon{display:none}
+}
 </style>
 </head>
 <body>
@@ -791,6 +827,10 @@ li{margin:.28em 0}
 <p><b>Где это полезно.</b> Когда группе нужно договориться и начать действовать.</p>
 <p><b>Как проверить.</b> Назовите группе цель, первый шаг и кто за него берётся. Спросите, всем ли понятно, что делать дальше.</p>
 </div>
+<nav class="example-actions" aria-label="Действия после примера">
+  <a href="/pkch?checkout=pkch#pkch-order">Получить свою карту — 14 900 ₽</a>
+  <a href="https://t.me/alexandr_kandakov?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!%20%D0%9F%D0%BE%D1%81%D0%BC%D0%BE%D1%82%D1%80%D0%B5%D0%BB%20%D0%BF%D1%80%D0%B8%D0%BC%D0%B5%D1%80%20%D0%9F%D0%9A%D0%A7.%20%D0%9C%D0%BE%D0%B9%20%D0%B2%D0%BE%D0%BF%D1%80%D0%BE%D1%81%3A%20">Задать вопрос о своей ситуации</a>
+</nav>
 </main>
 </div>
 
