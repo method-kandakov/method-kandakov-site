@@ -90,6 +90,7 @@
         <span>Я ознакомлен(а) с <a href="privacy.html" target="_blank" rel="noopener">Политикой обработки персональных данных</a>. Отдельное согласие будет зафиксировано при заполнении анкеты.</span>
       </label>
       <div class="checkout-note" id="recurring-note"></div>
+      <div class="checkout-message" id="checkout-error" role="alert" style="margin:0 0 14px"></div>
       <button class="btn btn-gold" id="checkout-go" type="button" aria-disabled="true">Продолжить оформление</button>
       <div class="checkout-message" id="checkout-message"></div>
     </div>`;
@@ -114,6 +115,7 @@
   const recurring = qs("#recurring-note", layer);
   const go = qs("#checkout-go", layer);
   const msg = qs("#checkout-message", layer);
+  const checkoutError = qs("#checkout-error", layer);
   const checkoutEmail=qs('#checkout-email',layer);
   const emailWrap=qs('#checkout-email-wrap',layer);
   let requestKey=null;
@@ -168,6 +170,8 @@
       updateGo();
       msg.classList.remove("show");
       msg.textContent = "";
+      checkoutError.classList.remove("show");
+      checkoutError.textContent = "";
       const hasPaymentLink = Boolean(paymentMap()[current]);
       recurring.textContent = btn.dataset.recurring === "true"
         ? "Перед оформлением ежемесячного участия вы отдельно увидите сумму, периодичность и условия автопродления."
@@ -190,7 +194,7 @@
       pendingCheckout=controller;
       updateGo();
       go.textContent='Создаём заказ…';
-      msg.classList.remove('show');
+      checkoutError.classList.remove('show');
       const timeout=setTimeout(()=>controller.abort(),15000);
       try {
         requestKey ||= createRequestKey();
@@ -208,15 +212,16 @@
         document.body.appendChild(form);form.submit();
       }catch(error){
         if(pendingCheckout!==controller)return;
-        msg.textContent=controller.signal.aborted
+        checkoutError.textContent=controller.signal.aborted
           ? 'Сервис оплаты не ответил вовремя. Попробуйте ещё раз: повторный запрос использует тот же заказ.'
           : error.message==='invalid_email'
             ? 'Проверьте адрес электронной почты.'
             : 'Не удалось подготовить оплату. Попробуйте ещё раз: повторный запрос использует тот же заказ.';
-        msg.classList.add('show');
+        checkoutError.classList.add('show');
         pendingCheckout=null;
         go.textContent='Перейти к оплате';
         updateGo();
+        checkoutError.scrollIntoView({block:'nearest'});
       }finally{
         clearTimeout(timeout);
       }
